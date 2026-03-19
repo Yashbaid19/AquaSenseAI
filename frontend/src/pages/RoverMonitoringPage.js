@@ -1,200 +1,190 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
-import { Bot, MapPin, Leaf, Camera, Activity } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Camera, Upload, Leaf, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const ROVER_FEED_URL = 'https://camera-backend-nhqu.onrender.com/frame';
 
 const RoverMonitoringPage = () => {
-  const [roverData, setRoverData] = useState(null);
   const [cropHealth, setCropHealth] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [feedKey, setFeedKey] = useState(Date.now());
+  const feedInterval = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetchRoverData();
+    fetchCropHealth();
+    // Refresh the live feed frame every 500ms
+    feedInterval.current = setInterval(() => {
+      setFeedKey(Date.now());
+    }, 500);
+    return () => clearInterval(feedInterval.current);
   }, []);
 
-  const fetchRoverData = async () => {
+  const fetchCropHealth = async () => {
     try {
       const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
-      
-      const healthResponse = await axios.get(`${API}/rover/health`, { headers });
-      setCropHealth(healthResponse.data);
-      
-      // Mock rover position data
-      setRoverData({
-        position: { x: 45.2, y: 23.8, zone: "Zone B" },
-        status: "Active",
-        battery: 87
+      const res = await axios.get(`${API}/rover/health`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-    } catch (error) {
-      console.error('Error:', error);
+      setCropHealth(res.data);
+    } catch (e) {
+      console.error('Crop health fetch error:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', file);
+      toast.info('Analyzing uploaded image with drone model...');
+      const res = await axios.post(`${API}/drone/upload-image`, formData, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+      });
+      setUploadResult(res.data);
+      toast.success('Image analyzed successfully!');
+    } catch (e) {
+      console.error('Upload error:', e);
+      toast.error('Failed to analyze image');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-500 border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-500 border-t-transparent" />
       </div>
     );
   }
 
-  const getHealthColor = (health) => {
-    if (health === 'Healthy') return 'emerald';
-    if (health === 'Stressed' || health === 'Mild Stress') return 'cyan';
-    return 'red';
-  };
-
   return (
     <div data-testid="rover-page" className="space-y-8">
       <div>
-        <h1 className="text-4xl font-heading font-bold text-slate-900 mb-2">
-          Rover Monitoring
-        </h1>
-        <p className="text-lg text-slate-600">
-          Ground-level crop health analysis
-        </p>
+        <h1 className="text-4xl font-heading font-bold text-slate-900 mb-2">Rover Monitor</h1>
+        <p className="text-lg text-slate-600">Live camera feed and crop analysis</p>
       </div>
 
-      {/* Rover Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="p-6 rounded-2xl border-2 border-sky-200 bg-gradient-to-br from-sky-50 to-cyan-50">
-            <Bot className="text-sky-600 mb-3" size={24} />
-            <h3 className="text-sm font-medium text-slate-600 mb-2">Rover Status</h3>
-            <p className="text-2xl font-heading font-bold text-sky-700">{roverData?.status}</p>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="p-6 rounded-2xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-sky-50">
-            <MapPin className="text-cyan-600 mb-3" size={24} />
-            <h3 className="text-sm font-medium text-slate-600 mb-2">Current Zone</h3>
-            <p className="text-2xl font-heading font-bold text-cyan-700">{roverData?.position?.zone}</p>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="p-6 rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50">
-            <Activity className="text-blue-600 mb-3" size={24} />
-            <h3 className="text-sm font-medium text-slate-600 mb-2">Battery Level</h3>
-            <p className="text-2xl font-heading font-bold text-blue-700">{roverData?.battery}%</p>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Camera Feed and Crop Health */}
+      {/* Live Feed + Upload */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card className="overflow-hidden rounded-2xl border-2 border-slate-200">
-            <div className="relative">
+        {/* Live Camera Feed */}
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+          <Card className="overflow-hidden rounded-2xl border-2 border-slate-200" data-testid="rover-live-feed">
+            <div className="relative bg-slate-900">
               <img
-                src="https://images.unsplash.com/photo-1625246333195-78d9c38ad449"
-                alt="Rover Camera Feed"
-                className="w-full h-80 object-cover"
+                src={`${ROVER_FEED_URL}?t=${feedKey}`}
+                alt="Rover Live Feed"
+                className="w-full h-[400px] object-contain"
+                onError={(e) => { e.target.style.opacity = 0.3; }}
               />
-              <div className="absolute top-4 left-4 px-4 py-2 rounded-full bg-cyan-500 text-white text-sm font-semibold">
+              <div className="absolute top-4 left-4 px-4 py-2 rounded-full bg-red-500 text-white text-sm font-semibold">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                  LIVE FEED
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                  LIVE
                 </div>
               </div>
-              <div className="absolute bottom-4 right-4 px-3 py-1 rounded-lg bg-black/60 text-white text-xs">
-                Simulated Camera Feed
-              </div>
             </div>
-            <div className="p-6">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <Camera className="text-cyan-600" size={20} />
-                <h3 className="text-xl font-heading font-semibold text-slate-900">Camera Feed</h3>
+                <h3 className="text-lg font-heading font-semibold text-slate-900">Rover Camera</h3>
               </div>
-              <p className="text-sm text-slate-600">Real-time ground-level crop monitoring</p>
+              <span className="text-xs text-slate-500">Refreshing @ 2 fps</span>
             </div>
           </Card>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card className={`p-6 rounded-2xl border-2 border-${getHealthColor(cropHealth?.health)}-200 bg-gradient-to-br from-${getHealthColor(cropHealth?.health)}-50 to-${getHealthColor(cropHealth?.health)}-100`}>
-            <div className="flex items-center gap-2 mb-6">
-              <Leaf className={`text-${getHealthColor(cropHealth?.health)}-600`} size={24} />
-              <h3 className="text-xl font-heading font-semibold text-slate-900">Crop Health Analysis</h3>
+        {/* Upload + Analysis */}
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+          {/* Upload Card */}
+          <Card className="p-6 rounded-2xl border-2 border-dashed border-cyan-300 bg-gradient-to-br from-cyan-50 to-sky-50" data-testid="rover-upload-card">
+            <div className="flex items-center gap-2 mb-4">
+              <Upload className="text-cyan-600" size={22} />
+              <h3 className="text-lg font-heading font-semibold text-slate-900">Upload Photo for Analysis</h3>
             </div>
-            
-            <div className="space-y-6">
-              <div className="text-center p-6 bg-white/70 backdrop-blur-sm rounded-xl">
-                <p className="text-sm text-slate-600 mb-2">Health Status</p>
-                <p className={`text-4xl font-heading font-bold text-${getHealthColor(cropHealth?.health)}-700 mb-2`}>
-                  {cropHealth?.health}
-                </p>
-                <p className="text-sm text-slate-600">
-                  Confidence: <span className="font-semibold">{(cropHealth?.confidence * 100).toFixed(0)}%</span>
-                </p>
-              </div>
+            <p className="text-sm text-slate-600 mb-4">Upload a crop/field image to analyze with the drone segmentation model</p>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleUpload}
+              className="hidden"
+              data-testid="rover-upload-input"
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="w-full bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl py-3"
+              data-testid="rover-upload-btn"
+            >
+              {uploading ? (
+                <span className="flex items-center gap-2"><RefreshCw className="animate-spin" size={16} /> Analyzing...</span>
+              ) : (
+                <span className="flex items-center gap-2"><Upload size={16} /> Choose Image</span>
+              )}
+            </Button>
+          </Card>
 
-              <div className="p-4 bg-white/70 backdrop-blur-sm rounded-xl">
-                <p className="text-sm font-medium text-slate-700 mb-3">Indicators:</p>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-600">Leaf Color:</span>
-                    <span className="text-sm font-semibold text-slate-900">{cropHealth?.indicators?.leaf_color}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-600">Wilting:</span>
-                    <span className="text-sm font-semibold text-slate-900">{cropHealth?.indicators?.wilting}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-600">Growth Rate:</span>
-                    <span className="text-sm font-semibold text-slate-900">{cropHealth?.indicators?.growth_rate}</span>
+          {/* Upload Result */}
+          {uploadResult && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="overflow-hidden rounded-2xl border-2 border-emerald-200" data-testid="rover-analysis-result">
+                {uploadResult.segmented_image && (
+                  <img src={uploadResult.segmented_image} alt="Segmented" className="w-full h-56 object-contain bg-slate-900" />
+                )}
+                <div className="p-5">
+                  <h4 className="text-base font-heading font-semibold text-slate-900 mb-3">Zone Analysis Result</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(uploadResult.zones || []).map((zone, i) => (
+                      <div
+                        key={i}
+                        className={`p-3 rounded-lg border ${zone.needs_irrigation ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}
+                      >
+                        <p className="text-sm font-semibold text-slate-800">{zone.id}</p>
+                        <p className="text-xs text-slate-600">{zone.label}</p>
+                        <p className="text-xs font-medium mt-1">{zone.coverage_percent}% coverage</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              </Card>
+            </motion.div>
+          )}
 
-              <div className={`p-4 rounded-xl bg-${getHealthColor(cropHealth?.health)}-100 border border-${getHealthColor(cropHealth?.health)}-200`}>
-                <p className="text-sm font-medium text-slate-900 mb-2">Recommended Action:</p>
-                <p className="text-sm text-slate-700">{cropHealth?.action}</p>
+          {/* Crop Health */}
+          {cropHealth && (
+            <Card className="p-6 rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-cyan-50" data-testid="rover-crop-health">
+              <div className="flex items-center gap-2 mb-4">
+                <Leaf className="text-emerald-600" size={22} />
+                <h3 className="text-lg font-heading font-semibold text-slate-900">Crop Health</h3>
               </div>
-            </div>
-          </Card>
+              <div className="text-center p-4 bg-white/70 rounded-xl mb-4">
+                <p className="text-3xl font-heading font-bold text-emerald-700">{cropHealth.health}</p>
+                <p className="text-sm text-slate-600 mt-1">Confidence: {(cropHealth.confidence * 100).toFixed(0)}%</p>
+              </div>
+              {cropHealth.action && (
+                <div className="p-3 rounded-lg bg-emerald-100 border border-emerald-200">
+                  <p className="text-sm text-slate-700">{cropHealth.action}</p>
+                </div>
+              )}
+            </Card>
+          )}
         </motion.div>
       </div>
-
-      {/* Position Info */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <Card className="p-6 rounded-2xl border-2 border-slate-200">
-          <h3 className="text-xl font-heading font-semibold text-slate-900 mb-4">Rover Position</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-cyan-50 rounded-xl border border-cyan-200">
-              <p className="text-sm text-slate-600 mb-1">X Coordinate</p>
-              <p className="text-2xl font-heading font-bold text-cyan-700">{roverData?.position?.x}</p>
-            </div>
-            <div className="p-4 bg-cyan-50 rounded-xl border border-cyan-200">
-              <p className="text-sm text-slate-600 mb-1">Y Coordinate</p>
-              <p className="text-2xl font-heading font-bold text-cyan-700">{roverData?.position?.y}</p>
-            </div>
-            <div className="p-4 bg-cyan-50 rounded-xl border border-cyan-200">
-              <p className="text-sm text-slate-600 mb-1">Current Zone</p>
-              <p className="text-2xl font-heading font-bold text-cyan-700">{roverData?.position?.zone}</p>
-            </div>
-          </div>
-        </Card>
-      </motion.div>
     </div>
   );
 };
