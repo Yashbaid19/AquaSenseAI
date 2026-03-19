@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Droplets, Thermometer, Wind, AlertTriangle, Sparkles, TrendingUp, Calendar, Zap, Info } from 'lucide-react';
+import { Droplets, Thermometer, Wind, AlertTriangle, Sparkles, TrendingUp, Calendar, Zap, Info, Wifi, WifiOff } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
@@ -8,6 +8,7 @@ import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const WS_URL = `${process.env.REACT_APP_BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://')}/api/ws`;
 
 const Dashboard = () => {
   const [sensorData, setSensorData] = useState(null);
@@ -19,14 +20,98 @@ const Dashboard = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef(null);
+  const reconnectTimer = useRef(null);
+
+  const connectWebSocket = useCallback(() => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = encodeURIComponent(user.id || 'default_user');
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
+
+    try {
+      const ws = new WebSocket(`${WS_URL}/${userId}`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setWsConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'sensor_update' && msg.data) {
+            setSensorData(prev => ({ ...prev, ...msg.data }));
+            setHistory(prev => [...prev, msg.data].slice(-20));
+            setDemoMode(false);
+          }
+          if (msg.type === 'alert' && msg.data) {
+            setAlerts(prev => [msg.data, ...prev].slice(0, 10));
+          }
+        } catch (e) { /* ignore parse errors */ }
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+        wsRef.current = null;
+        reconnectTimer.current = setTimeout(connectWebSocket, 5000);
+      };
+
+      ws.onerror = () => { ws.close(); };
+    } catch (e) {
+      setWsConnected(false);
+    }
+  }, []);
+
+  // Fast sensor polling (3s) + slower analytics polling (30s)
+  const fetchSensorData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const [sensorRes, decisionRes] = await Promise.all([
+        axios.get(`${API}/sensors/latest`, { headers }),
+        axios.get(`${API}/irrigation/predict`, { headers })
+      ]);
+
+      setSensorData(sensorRes.data);
+      setDecision({
+        decision: decisionRes.data.recommendation || "Monitor",
+        time: decisionRes.data.recommended_time || "Check later",
+        water_quantity: decisionRes.data.water_quantity || 0,
+        confidence: decisionRes.data.confidence || 85,
+        priority: decisionRes.data.status || "monitor",
+        explanation: {
+          factors: {
+            soil_moisture: sensorRes.data.soil_moisture + "%",
+            temperature: sensorRes.data.temperature + "\u00B0C",
+            humidity: sensorRes.data.humidity + "%",
+            rain_probability: (sensorRes.data.rain_probability || 0) + "%"
+          },
+          reasoning: decisionRes.data.recommendation || "Analyzing..."
+        }
+      });
+    } catch (e) { /* sensor fetch error */ }
+  };
 
   useEffect(() => {
     fetchAllData();
-    const interval = setInterval(() =>{
-      fetchAllData();
-    },5000);
-    return () => clearInterval(interval);
-  }, []);
+    connectWebSocket();
+
+    // Fast sensor polling every 3s
+    const sensorInterval = setInterval(fetchSensorData, 3000);
+    // Slower analytics polling every 30s
+    const analyticsInterval = setInterval(fetchNonSensorData, 30000);
+
+    return () => {
+      clearInterval(sensorInterval);
+      clearInterval(analyticsInterval);
+      if (wsRef.current) wsRef.current.close();
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    };
+  }, [connectWebSocket]);
 
   const fetchAllData = async () => {
     try {
@@ -93,6 +178,28 @@ const Dashboard = () => {
     }
   };
 
+  const fetchNonSensorData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const [zonesRes, alertsRes, scheduleRes, analyticsRes] = await Promise.all([
+        axios.get(`${API}/zones`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/alerts`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/schedule`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/analytics/water`, { headers }).catch(() => null)
+      ]);
+
+      setZones(Array.isArray(zonesRes.data) ? zonesRes.data : []);
+      setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : []);
+      setSchedule(Array.isArray(scheduleRes.data) ? scheduleRes.data : []);
+      if (analyticsRes?.data) setAnalytics(analyticsRes.data);
+    } catch (e) {
+      console.error('Non-sensor fetch error:', e);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-8">
@@ -150,8 +257,9 @@ const Dashboard = () => {
             animate={{ opacity: 1, scale: 1 }}
             className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 border-2 border-emerald-300"
           >
-            <Zap className="text-emerald-700" size={18} />
-            <span className="text-sm font-semibold text-emerald-800">Live IoT Data</span>
+            <Wifi className="text-emerald-700" size={18} />
+            <span className="text-sm font-semibold text-emerald-800">Live (3s refresh)</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           </motion.div>
         )}
       </div>

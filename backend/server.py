@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -10,6 +10,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse
 import os
 import logging
+import json
 from PIL import Image
 import io
 import random
@@ -29,6 +30,44 @@ from auth import hash_password, verify_password, create_access_token, get_curren
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+
+# WebSocket Connection Manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
+        logging.info(f"WebSocket connected for user: {user_id}")
+
+    def disconnect(self, websocket: WebSocket, user_id: str):
+        if user_id in self.active_connections:
+            self.active_connections[user_id] = [
+                ws for ws in self.active_connections[user_id] if ws != websocket
+            ]
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+        logging.info(f"WebSocket disconnected for user: {user_id}")
+
+    async def broadcast_to_user(self, user_id: str, data: dict):
+        if user_id in self.active_connections:
+            dead = []
+            for ws in self.active_connections[user_id]:
+                try:
+                    await ws.send_json(data)
+                except Exception:
+                    dead.append(ws)
+            for ws in dead:
+                self.active_connections[user_id].remove(ws)
+
+    async def broadcast_to_all(self, data: dict):
+        for user_id in list(self.active_connections.keys()):
+            await self.broadcast_to_user(user_id, data)
+
+ws_manager = ConnectionManager()
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
@@ -516,7 +555,23 @@ logging.basicConfig(
 # Import ML and Notification services
 from ml_service import ml_model
 from notification_service import get_notification_service
-from websocket_server import broadcast_sensor_update, broadcast_notification
+
+# WebSocket endpoint - must be on app directly (not router) for /api/ws path
+@app.websocket("/api/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    await ws_manager.connect(websocket, user_id)
+    # Also connect for default_user to get ESP32 data
+    await ws_manager.connect(websocket, "default_user") if user_id != "default_user" else None
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Keep connection alive, handle any client messages
+            if data == "ping":
+                await websocket.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, user_id)
+        if user_id != "default_user":
+            ws_manager.disconnect(websocket, "default_user")
 
 # Initialize notification service after database is loaded
 notification_service = None
@@ -567,12 +622,26 @@ async def ingest_sensor_data(data: dict):
     # Check for alerts
     alerts = await notification_service.check_sensor_alerts(user_id, sensor_doc)
     
-    # Broadcast to connected clients via WebSocket
-    await broadcast_sensor_update(user_id, sensor_doc)
-    
+    # Broadcast to connected clients via native WebSocket
+    ws_data = {
+        "type": "sensor_update",
+        "data": {
+            "user_id": user_id,
+            "device_id": device_id,
+            "soil_moisture": round(soil_moisture_percent, 1),
+            "temperature": data.get("temperature", 0),
+            "humidity": data.get("humidity", 0),
+            "soil_temp": data.get("soil_temp", 0),
+            "water_stress_index": sensor_doc["water_stress_index"],
+            "timestamp": sensor_doc["timestamp"],
+            "rain_probability": 0
+        }
+    }
+    await ws_manager.broadcast_to_user(user_id, ws_data)
+
     # Send alerts via WebSocket
     for alert in alerts:
-        await broadcast_notification(user_id, alert)
+        await ws_manager.broadcast_to_user(user_id, {"type": "alert", "data": alert})
     
     return {
         "status": "success",
