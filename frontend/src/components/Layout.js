@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Droplets, LayoutDashboard, MessageSquare, BarChart3, LogOut, User } from 'lucide-react';
+import { Droplets, LayoutDashboard, MessageSquare, BarChart3, LogOut, User, Droplet, Map, Plane } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = ({ children }) => {
@@ -16,6 +16,9 @@ const Layout = ({ children }) => {
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/irrigation', icon: Droplet, label: 'Irrigation' },
+    { path: '/zones', icon: Map, label: 'Farm Zones' },
+    { path: '/drone', icon: Plane, label: 'Drone' },
     { path: '/ai-chat', icon: MessageSquare, label: 'AI Chat' },
     { path: '/analytics', icon: BarChart3, label: 'Analytics' }
   ];

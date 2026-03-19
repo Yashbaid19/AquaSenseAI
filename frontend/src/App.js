@@ -5,11 +5,15 @@ import { Toaster } from 'sonner';
 import '@/App.css';
 
 // Pages
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import Dashboard from './pages/Dashboard';
 import AIChatPage from './pages/AIChatPage';
 import AdvancedAnalyticsPage from './pages/AdvancedAnalyticsPage';
+import IrrigationPage from './pages/IrrigationPage';
+import FarmZonesPage from './pages/FarmZonesPage';
+import DroneMonitoringPage from './pages/DroneMonitoringPage';
 
 // Layout
 import Layout from './components/Layout';
@@ -40,6 +44,12 @@ const AppRoutes = () => {
     <Routes>
       {/* Public Routes */}
       <Route
+        path="/"
+        element={
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />
+        }
+      />
+      <Route
         path="/login"
         element={
           isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
@@ -59,6 +69,36 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <Layout>
               <Dashboard />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/irrigation"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <IrrigationPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/zones"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <FarmZonesPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/drone"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <DroneMonitoringPage />
             </Layout>
           </ProtectedRoute>
         }
@@ -85,8 +125,7 @@ const AppRoutes = () => {
       />
 
       {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

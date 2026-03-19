@@ -39,7 +39,7 @@ const Dashboard = () => {
   const checkSensorAlerts = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${API}/notifications/check-alerts`, {}, {
+      await axios.get(`${API}/notifications`, {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
@@ -56,10 +56,10 @@ const Dashboard = () => {
 
       const [sensorRes, decisionRes, zonesRes, alertsRes, scheduleRes, analyticsRes, historyRes] = await Promise.all([
         axios.get(`${API}/sensors/latest`, { headers }),
-        axios.get(`${API}/irrigation/decision`, { headers }),
-        axios.get(`${API}/drone/zones`, { headers }),
-        axios.get(`${API}/dashboard/alerts`, { headers }),
-        axios.get(`${API}/dashboard/schedule`, { headers }),
+        axios.get(`${API}/irrigation/predict`, { headers }),
+        axios.get(`${API}/drone/latest`, { headers }),
+        axios.get(`${API}/notifications`, { headers }),
+        axios.get(`${API}/zones`, { headers }),
         axios.get(`${API}/analytics/water`, { headers }),
         axios.get(`${API}/sensors/history`, { headers })
       ]);
