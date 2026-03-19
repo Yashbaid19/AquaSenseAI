@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Droplets, Thermometer, Wind, AlertTriangle, Sparkles, TrendingUp, Calendar, Zap, Info, RefreshCw } from 'lucide-react';
+import { Droplets, Thermometer, Wind, AlertTriangle, Sparkles, TrendingUp, Calendar, Zap, Info } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
-import { toast } from 'sonner';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -20,46 +19,22 @@ const Dashboard = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(new Date());
 
   useEffect(() => {
     fetchAllData();
-    checkSensorAlerts();
-    
-    // Auto-refresh every 60 seconds
-    const interval = setInterval(() => {
-      fetchAllData();
-      checkSensorAlerts();
-    }, 60000);
-
-    return () => clearInterval(interval);
   }, []);
 
-  const checkSensorAlerts = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.get(`${API}/notifications`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    } catch (error) {
-      console.error('Error checking alerts:', error);
-    }
-  };
-
-  const fetchAllData = async (showToast = false) => {
-    if (showToast) setRefreshing(true);
-    
+  const fetchAllData = async () => {
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
 
       const [sensorRes, decisionRes, zonesRes, alertsRes, scheduleRes, analyticsRes, historyRes] = await Promise.all([
         axios.get(`${API}/sensors/latest`, { headers }),
-        axios.get(`${API}/irrigation/predict`, { headers }),
-        axios.get(`${API}/drone/latest`, { headers }),
-        axios.get(`${API}/notifications`, { headers }),
-        axios.get(`${API}/zones`, { headers }),
+        axios.get(`${API}/irrigation/decision`, { headers }),
+        axios.get(`${API}/drone/zones`, { headers }),
+        axios.get(`${API}/dashboard/alerts`, { headers }),
+        axios.get(`${API}/dashboard/schedule`, { headers }),
         axios.get(`${API}/analytics/water`, { headers }),
         axios.get(`${API}/sensors/history`, { headers })
       ]);
@@ -72,19 +47,10 @@ const Dashboard = () => {
       setAnalytics(analyticsRes.data);
       setHistory(historyRes.data.reverse().slice(-20));
       setDemoMode(sensorRes.data.demo_mode || false);
-      setLastUpdate(new Date());
-      
-      if (showToast) {
-        toast.success('Dashboard data refreshed');
-      }
     } catch (error) {
       console.error('Error:', error);
-      if (showToast) {
-        toast.error('Failed to refresh data');
-      }
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
@@ -130,35 +96,25 @@ const Dashboard = () => {
             AI-powered irrigation decision system
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => fetchAllData(true)}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border-2 border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all disabled:opacity-50"
+        {demoMode ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-100 border-2 border-cyan-300"
           >
-            <RefreshCw className={`text-slate-600 ${refreshing ? 'animate-spin' : ''}`} size={18} />
-            <span className="text-sm font-medium text-slate-700">Refresh</span>
-          </button>
-          {demoMode ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-100 border-2 border-cyan-300"
-            >
-              <Info className="text-cyan-700" size={18} />
-              <span className="text-sm font-semibold text-cyan-800">Demo Mode Active</span>
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 border-2 border-emerald-300"
-            >
-              <Zap className="text-emerald-700" size={18} />
-              <span className="text-sm font-semibold text-emerald-800">Live IoT Data</span>
-            </motion.div>
-          )}
-        </div>
+            <Info className="text-cyan-700" size={18} />
+            <span className="text-sm font-semibold text-cyan-800">Demo Mode Active</span>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 border-2 border-emerald-300"
+          >
+            <Zap className="text-emerald-700" size={18} />
+            <span className="text-sm font-semibold text-emerald-800">Live IoT Data</span>
+          </motion.div>
+        )}
       </div>
 
       {/* Top Row: Sensor Panel + Irrigation Decision */}
