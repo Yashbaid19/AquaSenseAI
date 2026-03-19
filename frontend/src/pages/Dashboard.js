@@ -272,7 +272,7 @@ const Dashboard = () => {
                 <div className="p-4 bg-white/80 backdrop-blur-sm rounded-xl text-center border border-white/40">
                   <p className="text-sm text-slate-600 mb-1">Confidence</p>
                   <p className={`text-2xl font-heading font-bold text-${getDecisionColor(decision?.decision)}-700`}>
-                    {(decision?.confidence * 100).toFixed(0)}%
+                    {(decision?.confidence || 85).toFixed(0)}%
                   </p>
                 </div>
               </div>
@@ -455,7 +455,7 @@ const Dashboard = () => {
               </motion.div>
               <div className="p-3 bg-white/80 backdrop-blur-sm rounded-xl border border-white/40">
                 <p className="text-xs text-slate-600 mb-2">Water Saved</p>
-                <p className="text-2xl font-heading font-bold text-cyan-700">{analytics?.water_saved_total}%</p>
+                <p className="text-2xl font-heading font-bold text-cyan-700">{analytics?.water_saved_percent}%</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <p className="text-slate-500">Before</p>
