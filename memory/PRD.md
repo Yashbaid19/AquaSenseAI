@@ -11,69 +11,61 @@ Build a full-stack "AquaSense AI - Smart Irrigation Platform" with:
 
 ## Architecture
 - **Frontend**: React, Tailwind CSS, Recharts, Framer Motion, D3.js, Axios
-- **Backend**: FastAPI, Motor (async MongoDB), Pydantic, python-socketio
+- **Backend**: FastAPI, Motor (async MongoDB), Pydantic, joblib, PyTorch
 - **Database**: MongoDB (aquasense)
 - **Auth**: JWT-based
-- **ML**: Rule-based fallbacks (pkl/pth models have compatibility issues)
+- **ML Models**: 
+  - `irrigation_model.pkl` - RandomForestRegressor (5 features: soil_moisture, temperature, humidity, rain_forecast, time_of_day) loaded via joblib
+  - `final_drone_model.pth` - UNet with ResNet34 encoder for 4-class moisture zone segmentation loaded via custom architecture
 
-## What's Been Implemented (as of Mar 19, 2026)
+## What's Been Implemented
 
 ### Core Features
 - User authentication (signup/login) with JWT
-- Dashboard with sensor data, AI decision, zone map, schedule, alerts, water analytics, sensor trends chart
-- Irrigation prediction with rule-based AI model
-- Farm zones management
+- Dashboard with sensor data, AI decision, zone map, schedule, alerts, water analytics, sensor trends
+- Real-time 3s auto-refresh + WebSocket endpoint for instant ESP32 push updates
+- ML-powered irrigation prediction using RandomForest model
+- ML-powered drone image segmentation using UNet-ResNet34 model  
+- Farm zones management with image upload
 - Drone monitoring with live feed
-- Rover monitoring
-- Water analytics
+- Water analytics, Advanced analytics with D3 heatmap
 - AI Chat (Gemini via emergent integrations)
-- Advanced analytics with D3 heatmap, yield prediction, efficiency metrics
-- IoT data ingestion endpoint (/api/iot/sensor-data) for ESP32
+- IoT data ingestion endpoint for ESP32
 - Settings page
 
 ### Bug Fixes (Mar 19, 2026)
-- Fixed water analytics showing 8994% -> now shows correct ~22%
-- Fixed AI confidence showing 8930% -> now shows correct ~87%
-- Fixed missing Zone Map (was set to empty array, now fetches from /api/zones)
-- Added /api/schedule endpoint and populated Schedule section
-- Added /api/alerts endpoint and populated Smart Alerts section
-- Fixed missing Soil Temperature card (added soil_temp to mock data)
-- Fixed Before/After usage showing blank -> now shows proper values with "L" suffix
-- Fixed Advanced Analytics heatmap (D3 zero-domain edge case)
+- Fixed water analytics showing 8994% -> correct ~22%
+- Fixed AI confidence showing 8930% -> correct ~87%
+- Fixed missing Zone Map, Schedule, Smart Alerts sections
+- Fixed missing Soil Temperature card
+- Fixed Before/After usage blank -> proper values with "L" suffix
+- Fixed Advanced Analytics heatmap zero-domain edge case
+- Fixed ML model loading: joblib for irrigation, UNet architecture for drone
+- Added WebSocket for real-time sensor updates
 
 ## Key API Endpoints
 - POST /api/auth/signup, /api/auth/login
 - GET /api/sensors/latest, /api/sensors/history
-- GET /api/irrigation/predict
-- GET /api/zones
-- GET /api/analytics/water, /api/analytics/advanced, /api/analytics/irrigation-patterns
-- GET /api/schedule, /api/alerts
-- GET /api/notifications, /api/notifications/count
-- POST /api/iot/sensor-data
-- POST /api/drone/process-frame, /api/drone/upload-image
-- GET /api/drone/latest, /api/drone/latest-analysis
-- GET /api/rover/latest
-- POST /api/chat
-- POST /api/simulation
+- GET /api/irrigation/predict (ML model powered)
+- GET /api/zones, /api/schedule, /api/alerts
+- GET /api/analytics/water, /api/analytics/advanced
+- POST /api/iot/sensor-data (ESP32 endpoint, no auth required)
+- POST /api/drone/upload-image (ML model powered)
+- WS /api/ws/{user_id} (WebSocket for real-time updates)
 
 ## Test Credentials
-- Email: test@aquasense.ai
-- Password: test123
+- Email: test@aquasense.ai | Password: test123
 
 ## Prioritized Backlog
 
-### P0 (Next)
-- WebSocket real-time frontend integration (backend already set up, frontend not connected)
-
 ### P1
-- Verify AI Chatbot functionality (uses Gemini via emergent integrations)
+- Verify AI Chatbot functionality (Gemini integration)
 
 ### P2
-- Resolve ML model loading issues (.pkl, .pth compatibility)
 - Explain "Predicted Yield vs Base Yield" logic in Advanced Analytics
 
 ### Future
-- Firebase push notifications integration
+- Firebase push notifications
 - Multi-farm support
 - Historical report generation
 - Mobile-responsive optimizations
