@@ -7,13 +7,16 @@ import '@/App.css';
 // Pages
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
+import SignupPage from './pages/SignupPage';
 import Dashboard from './pages/Dashboard';
 import AIChatPage from './pages/AIChatPage';
 import AdvancedAnalyticsPage from './pages/AdvancedAnalyticsPage';
 import IrrigationPage from './pages/IrrigationPage';
 import FarmZonesPage from './pages/FarmZonesPage';
 import DroneMonitoringPage from './pages/DroneMonitoringPage';
+import RoverMonitoringPage from './pages/RoverMonitoringPage';
+import WaterAnalyticsPage from './pages/WaterAnalyticsPage';
+import SettingsPage from './pages/SettingsPage';
 
 // Layout
 import Layout from './components/Layout';
@@ -58,7 +61,13 @@ const AppRoutes = () => {
       <Route
         path="/register"
         element={
-          isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignupPage />
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignupPage />
         }
       />
 
@@ -99,6 +108,36 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <Layout>
               <DroneMonitoringPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/rover"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <RoverMonitoringPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/water-analytics"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <WaterAnalyticsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SettingsPage />
             </Layout>
           </ProtectedRoute>
         }
