@@ -38,10 +38,12 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket, user_id: str):
         await websocket.accept()
+        self._register(websocket, user_id)
+
+    def _register(self, websocket: WebSocket, user_id: str):
         if user_id not in self.active_connections:
             self.active_connections[user_id] = []
         self.active_connections[user_id].append(websocket)
-        logging.info(f"WebSocket connected for user: {user_id}")
 
     def disconnect(self, websocket: WebSocket, user_id: str):
         if user_id in self.active_connections:
@@ -50,7 +52,6 @@ class ConnectionManager:
             ]
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
-        logging.info(f"WebSocket disconnected for user: {user_id}")
 
     async def broadcast_to_user(self, user_id: str, data: dict):
         if user_id in self.active_connections:
@@ -560,12 +561,12 @@ from notification_service import get_notification_service
 @app.websocket("/api/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     await ws_manager.connect(websocket, user_id)
-    # Also connect for default_user to get ESP32 data
-    await ws_manager.connect(websocket, "default_user") if user_id != "default_user" else None
+    # Also subscribe to default_user to get ESP32 data
+    if user_id != "default_user":
+        ws_manager._register(websocket, "default_user")
     try:
         while True:
             data = await websocket.receive_text()
-            # Keep connection alive, handle any client messages
             if data == "ping":
                 await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:

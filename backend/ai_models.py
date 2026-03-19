@@ -6,9 +6,10 @@ Only 3 core models:
 3. Rover Crop Health
 """
 import random
-import pickle
+import joblib
 import os
 import numpy as np
+import pandas as pd
 from datetime import datetime, timezone
 
 class IrrigationPredictor:
@@ -23,13 +24,12 @@ class IrrigationPredictor:
         """Load the ML model if it exists"""
         try:
             if os.path.exists(self.model_path):
-                with open(self.model_path, 'rb') as f:
-                    self.ml_model = pickle.load(f)
-                print(f"✅ ML irrigation model loaded successfully from {self.model_path}")
+                self.ml_model = joblib.load(self.model_path)
+                print(f"ML irrigation model loaded successfully from {self.model_path}")
             else:
-                print(f"⚠️ ML model not found at {self.model_path}, using rule-based fallback")
+                print(f"ML model not found at {self.model_path}, using rule-based fallback")
         except Exception as e:
-            print(f"⚠️ Error loading ML model: {e}, using rule-based fallback")
+            print(f"Error loading ML model: {e}, using rule-based fallback")
             self.ml_model = None
     
     def predict(self, soil_moisture, temperature, humidity, rain_probability):
@@ -49,62 +49,59 @@ class IrrigationPredictor:
     
     def _predict_with_ml(self, soil_moisture, temperature, humidity, rain_probability):
         """Use ML model for prediction"""
-        # Prepare features for ML model
-        features = np.array([[soil_moisture, temperature, humidity, rain_probability]])
-        
-        # Get ML prediction
-        prediction = self.ml_model.predict(features)[0]
-        
-        # Get probability/confidence if available
-        try:
-            probabilities = self.ml_model.predict_proba(features)[0]
-            confidence = round(max(probabilities) * 100, 1)
-        except (AttributeError, Exception):
-            confidence = 85.0
-        
-        # Map ML prediction to decision format
-        # Assuming model outputs: 0=No irrigation, 1=Low priority, 2=Medium priority, 3=High priority
-        decision_map = {
-            0: ("Monitor", "Check in 6 hours", 0, "LOW"),
-            1: ("Irrigate", "6 hours", 8.0, "LOW"),
-            2: ("Irrigate", "3 hours", 15.0, "MEDIUM"),
-            3: ("Irrigate", "Immediately", 22.0, "HIGH")
-        }
-        
-        # Handle both numeric and string predictions
-        if isinstance(prediction, (int, np.integer)):
-            pred_idx = int(prediction)
+        hour = datetime.now(timezone.utc).hour
+        features = pd.DataFrame(
+            [[soil_moisture, temperature, humidity, rain_probability, hour]],
+            columns=['soil_moisture', 'temperature', 'humidity', 'rain_forecast', 'time_of_day']
+        )
+
+        # Get ML prediction (water quantity L/m2)
+        water_quantity = float(self.ml_model.predict(features)[0])
+        water_quantity = round(max(0, water_quantity), 1)
+
+        # Determine decision based on predicted water quantity
+        if water_quantity > 15:
+            decision, time, priority = "Irrigate", "Immediately", "HIGH"
+        elif water_quantity > 8:
+            decision, time, priority = "Irrigate", "3 hours", "MEDIUM"
+        elif water_quantity > 3:
+            decision, time, priority = "Irrigate", "6 hours", "LOW"
         else:
-            pred_idx = 2  # Default to medium priority
-        
-        # Clamp to valid range
-        pred_idx = max(0, min(3, pred_idx))
-        
-        decision, time, water, priority = decision_map.get(pred_idx, decision_map[2])
-        
-        # Adjust based on rain probability
+            decision, time, priority = "Monitor", "Check in 6 hours", "LOW"
+
+        # Override if rain is expected
         if rain_probability > 60:
             decision = "Delay"
             time = "12 hours (after rain)"
-            water = 0
             priority = "NONE"
-        
+
+        # Calculate confidence from model's estimators
+        try:
+            tree_preds = [tree.predict(features.values)[0] for tree in self.ml_model.estimators_]
+            std = np.std(tree_preds)
+            mean = np.mean(tree_preds)
+            cv = std / mean if mean > 0 else 0
+            confidence = round(max(60, min(98, 95 - cv * 30)), 1)
+        except Exception:
+            confidence = 85.0
+
         explanation = {
             "factors": {
                 "soil_moisture": f"{soil_moisture}%",
-                "temperature": f"{temperature}°C",
+                "temperature": f"{temperature}C",
                 "humidity": f"{humidity}%",
                 "rain_probability": f"{rain_probability}%"
             },
-            "reasoning": f"ML Model: Soil moisture at {soil_moisture}% with {temperature}°C temperature. "
-                        f"Rain probability: {rain_probability}%. Decision: {decision}.",
-            "model_type": "Machine Learning (irrigation_model.pkl)"
+            "reasoning": f"ML Model predicts {water_quantity} L/m2 water needed. "
+                        f"Soil moisture at {soil_moisture}%, temp {temperature}C. "
+                        f"Decision: {decision}.",
+            "model_type": "Machine Learning (RandomForest)"
         }
-        
+
         return {
             "decision": decision,
             "time": time,
-            "water_quantity": water,
+            "water_quantity": water_quantity,
             "priority": priority,
             "confidence": confidence,
             "explanation": explanation
