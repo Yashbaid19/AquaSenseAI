@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Truck
 } from 'lucide-react';
 
 const DashboardLayout = () => {
@@ -39,7 +40,7 @@ const DashboardLayout = () => {
     { path: '/irrigation', icon: Droplet, label: 'Irrigation' },
     { path: '/zones', icon: Map, label: 'Farm Zones' },
     { path: '/drone', icon: Plane, label: 'Drone Monitor' },
-    { path: '/rover', icon: Plane, label: 'Rover Monitor' },
+    { path: '/rover', icon: Truck, label: 'Rover Monitor' },
     { path: '/analytics', icon: Gauge, label: 'Water Analytics' },
     { path: '/chat', icon: MessageSquare, label: 'AI Chat' },
     { path: '/advanced-analytics', icon: BarChart3, label: 'Advanced Analytics' },
