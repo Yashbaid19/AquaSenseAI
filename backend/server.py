@@ -396,7 +396,7 @@ async def root():
     return {"message": "AquaSense AI API", "status": "operational"}
 
 
-app.include_router(api_router)
+# app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -594,3 +594,6 @@ async def get_unread_count(user_id: str = Depends(get_current_user_id)):
     """Get unread notification count"""
     notifications = await notification_service.get_user_notifications(user_id, unread_only=True)
     return {"unread_count": len(notifications)}
+
+# Include router after all routes are defined
+app.include_router(api_router)
