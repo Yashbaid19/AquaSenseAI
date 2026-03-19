@@ -239,64 +239,71 @@ async def get_irrigation_prediction(user_id: str = Depends(get_current_user_id))
         latest = mock_data
     
     soil_moisture = latest.get("soil_moisture", 30)
-    rain_mm, humidity = await get_weather_safe()
-
-    rain_expected = rain_mm > 0
-    rain_hours = 2 if rain_expected else 0
+    temperature = latest.get("temperature", 25)
+    humidity = latest.get("humidity", 60)
     
-    if soil_moisture > 35:
-        recommendation = "No irrigation needed"
+    # Get weather data
+    rain_mm, weather_humidity = await get_weather_safe()
+    rain_probability = min(100, int(rain_mm * 10)) if rain_mm else 0
+    
+    # Use AI model for prediction
+    from ai_models import irrigation_predictor
+    decision = irrigation_predictor.predict(
+        soil_moisture=soil_moisture,
+        temperature=temperature, 
+        humidity=humidity,
+        rain_probability=rain_probability
+    )
+    
+    # Map AI decision to our response format
+    recommendation = decision.get("decision", "Monitor")
+    if recommendation == "Irrigate":
+        status = "schedule" if decision.get("priority") == "MEDIUM" else "critical"
+        recommended_time = decision.get("time", "Soon")
+    elif recommendation == "Delay":
+        status = "monitor"
+        recommended_time = decision.get("time", "After rain")
+    else:  # Monitor
         status = "optimal"
         recommended_time = "N/A"
-        water_quantity = 0
-        crop_stress = "Low"
-    elif soil_moisture > 28:
-        if rain_expected:
-            recommendation = f"Delay irrigation - rain expected in {rain_hours} hours"
-            status = "monitor"
-            recommended_time = f"After {rain_hours + 2} hours"
-        else:
-            recommendation = "Light irrigation recommended"
-            status = "schedule"
-            recommended_time = "In 4-6 hours"
-        water_quantity = 15.0
+    
+    water_quantity = decision.get("water_quantity", 0)
+    
+    # Determine crop stress based on soil moisture
+    if soil_moisture < 25:
+        crop_stress = "Critical"
+    elif soil_moisture < 35:
+        crop_stress = "High"  
+    elif soil_moisture < 45:
         crop_stress = "Moderate"
     else:
-        recommendation = "Immediate irrigation required"
-        status = "critical"
-        recommended_time = "Immediately"
-        water_quantity = 25.0
-        crop_stress = "High"
+        crop_stress = "Low"
     
+    # Log the decision
     await irrigation_logs_collection.insert_one({
         "user_id": user_id,
         "recommended_time": recommended_time,
         "water_quantity": water_quantity,
         "crop_stress_level": crop_stress,
-        "rain_forecast": f"Rain in {rain_hours} hours" if rain_expected else "No rain expected",
-        "recommendation": recommendation,
+        "rain_forecast": f"{rain_probability}% chance",
+        "recommendation": f"{recommendation} - {decision.get('explanation', {}).get('reasoning', '')}",
         "status": status,
+        "confidence": decision.get("confidence", 85),
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
     
     return {
-        "decision": recommendation,
-        "time": recommended_time,
+        "recommendation": f"{recommendation} - {decision.get('explanation', {}).get('reasoning', 'Based on sensor data')}",
+        "recommended_time": recommended_time,
         "water_quantity": water_quantity,
-        "confidence": round(random.uniform(0.7, 0.95), 2),  # temp AI confidence
-        "priority": status.upper(),
-        "rain_probability": rain_mm * 10,  # simple %
-        "explanation": {
-            "factors": {
-                "soil_moisture": soil_moisture,
-                "rain_forecast": rain_expected,
-                "humidity": humidity
-            },
-            "reasoning": recommendation
-        }
+        "crop_stress_level": crop_stress,
+        "rain_forecast": f"{rain_probability}% chance of rain",
+        "rain_probability": rain_probability,
+        "status": status,
+        "current_soil_moisture": soil_moisture,
+        "confidence": decision.get("confidence", 85),
+        "model_type": decision.get("explanation", {}).get("model_type", "AI Model")
     }
-
-
 # Farm Zones
 @api_router.get("/zones")
 async def get_farm_zones(user_id: str = Depends(get_current_user_id)):
@@ -388,10 +395,25 @@ async def get_water_analytics(user_id: str = Depends(get_current_user_id)):
         ).sort("date", -1).limit(30).to_list(30)
     
     total_saved = sum(a["water_saved"] for a in analytics)
+    total_used = sum(a["water_used"] for a in analytics)
     avg_efficiency = sum(a["efficiency"] for a in analytics) / len(analytics) if analytics else 0
     
+    # Calculate before (without AI) and after (with AI)
+    before_usage = total_used + total_saved  # What would have been used
+    after_usage = total_used  # Actual usage with AI
+    
+    # Calculate percentage saved (capped at 99%)
+    if before_usage > 0:
+        water_saved_percent = min(99.0, (total_saved / before_usage) * 100)
+    else:
+        water_saved_percent = 0.0
+    
     return {
+        "efficiency_score": round(avg_efficiency, 2),
+        "water_saved_percent": round(water_saved_percent, 2),
         "water_saved_total": round(total_saved, 2),
+        "before_usage": round(before_usage, 2),
+        "after_usage": round(after_usage, 2),
         "efficiency_average": round(avg_efficiency, 2),
         "history": analytics
     }
