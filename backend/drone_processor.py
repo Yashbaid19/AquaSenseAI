@@ -14,11 +14,25 @@ class DroneZoneProcessor:
     def __init__(self, model_path="/app/backend/models/final_drone_model.pth"):
         try:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            self.model = torch.load(model_path, map_location=self.device)
-            self.model.eval()
-            logger.info(f"Drone model loaded successfully on {self.device}")
+            checkpoint = torch.load(model_path, map_location=self.device)
+            
+            # Handle different model formats
+            if isinstance(checkpoint, dict):
+                # If it's a state dict, we need the model architecture
+                # For now, use demo mode
+                logger.warning("Model is a state dict, using demo mode")
+                self.model = None
+            else:
+                self.model = checkpoint
+                if hasattr(self.model, 'eval'):
+                    self.model.eval()
+                else:
+                    logger.warning("Model doesn't have eval method, using demo mode")
+                    self.model = None
+            
+            logger.info(f"Drone processor initialized on {self.device}")
         except Exception as e:
-            logger.error(f"Error loading drone model: {e}")
+            logger.error(f"Error loading drone model: {e}, using demo mode")
             self.model = None
         
         self.transform = transforms.Compose([

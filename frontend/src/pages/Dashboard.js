@@ -25,7 +25,7 @@ const Dashboard = () => {
     const interval = setInterval(() =>{
       fetchAllData();
     },5000);
-    return () => ckearInterval(interval);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchAllData = async () => {
@@ -36,13 +36,30 @@ const Dashboard = () => {
       const [sensorRes, decisionRes, zonesRes, alertsRes, scheduleRes, analyticsRes, historyRes] = await Promise.all([
         axios.get(`${API}/sensors/latest`, { headers }),
         axios.get(`${API}/irrigation/predict`, { headers }),
-        axios.get(`${API}/drone/latest-analysis`, { headers }),
+        axios.get(`${API}/zones`, { headers }),
         axios.get(`${API}/analytics/water`, { headers }),
         axios.get(`${API}/sensors/history`, { headers })
       ]);
       console.log("History Data:",historyRes.data);
+      console.log("Sensor:", sensorRes.data);
+      console.log("Decision:", decisionRes.data);
+      console.log("Zones:", zonesRes.data);
+      console.log("Analytics:", analyticsRes.data)
       setSensorData(sensorRes.data);
-      setDecision(decisionRes.data);
+      setDecision({
+        decision: decisionRes.data.recommendation,
+        time: decisionRes.data.recommended_time,
+        water_quantity: decisionRes.data.water_quantity,
+        confidence: 0.75,
+        priority: decisionRes.data.status,
+        explanation:{
+          factors:{
+            soil_moisture: sensorRes.data.soil_moisture,
+            humidity: sensorRos.data.humidity
+          },
+          reasoning: decisionRes.data.recommendation
+        }
+      });
       setZones(zonesRes.data);
       setAnalytics(analyticsRes.data);
       setHistory(historyRes.data.reverse().slice(-20));
@@ -77,11 +94,11 @@ const Dashboard = () => {
     return 'slate';
   };
 
-  const getZoneColor = (e) => {
-    if (status === 'Healthy') return 'emerald';
-    if (status === 'Dry') return 'red';
-    if (status === 'Overwatered') return 'blue';
-    return 'cyan';
+  const getZoneColor = (status) => {
+    if (status === 'healthy') return 'emerald';
+    if (status === 'critical') return 'red';
+    if (status === 'needs_irrigation') return 'cyan';
+    return 'blue';
   };
 
   return (
@@ -243,89 +260,99 @@ const Dashboard = () => {
       </div>
 
       {/* Middle Row: Zone Map + Explainable AI */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-      <Card className="p-6 rounded-2xl border-2 border-slate-200 bg-white/80 backdrop-blur-sm shadow-xl">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-      <h3 className="text-xl font-heading font-semibold text-slate-900 mb-4">
-        Zone Map (Drone Analysis)
-      </h3>
-
-      <div className="grid grid-cols-2 gap-4">
-      {zones?.map((zone, index) => (
-        <motion.div
-          key={index}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 * index }}
-          whileHover={{ scale: 1.05, y: -5 }}
-          className={`p-4 rounded-xl border-2 border-${getZoneColor(zone.status)}-300 bg-${getZoneColor(zone.status)}-50 cursor-pointer`}
+        {/* ZONE MAP */}
+        <motion.div     
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
         >
-          <div className="flex items-center justify-between mb-2">
-            <p className="font-semibold text-slate-900">
-              {zone.zone_name}
-            </p>
-          
-            {/* ✅ FIXED */}
-            <span
-              className={`w-3 h-3 rounded-full bg-${getZoneColor(zone.status)}-500`}
-            ></span>
-          </div>
-        
-          <p className={`text-sm font-bold text-${getZoneColor(zone.status)}-700 mb-1`}>
-            {zone.status}
-          </p>
+          <Card className="p-6 rounded-2xl border-2 border-slate-200 bg-white/80 backdrop-blur-sm shadow-xl">
 
-          <p className="text-xs text-slate-600">
-            {zone.soil_moisture}% moisture
-          </p>
+            <h3 className="text-xl font-heading font-semibold text-slate-900 mb-4">
+              Zone Map (Drone Analysis)
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              {zones?.map((zone, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.1 * index }}
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  className={`p-4 rounded-xl border-2 border-${getZoneColor(zone.status)}-300 bg-${getZoneColor(zone.status)}-50 cursor-pointer`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-semibold text-slate-900">
+                      {zone.zone_name}
+                    </p>
+              
+                    <span
+                      className={`w-3 h-3 rounded-full bg-${getZoneColor(zone.status)}-500`}
+                    ></span>
+                  </div>
+              
+                  <p className={`text-sm font-bold text-${getZoneColor(zone.status)}-700 mb-1`}>
+                    {zone.status}
+                  </p>
+              
+                  <p className="text-xs text-slate-600">
+                    {zone.soil_moisture}% moisture
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+            
+          </Card>
         </motion.div>
-      ))}
-    </div>
-
-  </Card>
-</motion.div>
-
+            
         {/* EXPLAINABLE AI */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
           <Card className="p-6 rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 backdrop-blur-sm shadow-xl">
             <div className="flex items-center gap-2 mb-6">
               <Sparkles className="text-blue-600" size={24} />
-              <h3 className="text-xl font-heading font-semibold text-slate-900">Why This Decision?</h3>
+              <h3 className="text-xl font-heading font-semibold text-slate-900">
+                Why This Decision?
+              </h3>
             </div>
             
-            <div className="space-y-4">
-              <motion.div 
-                className="p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-white/40"
-                initial={{ x: -20 }}
-                animate={{ x: 0 }}
-              >
-                <p className="text-sm font-medium text-slate-700 mb-3">Factors Analyzed:</p>
+            <div className="space-y-4">     
+              <div className="p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-white/40">
+                <p className="text-sm font-medium text-slate-700 mb-3">
+                  Factors Analyzed:
+                </p>
+            
                 <div className="space-y-2">
-                  {decision?.explanation?.factors && Object.entries(decision.explanation.factors).map(([key, value]) => (
-                    <div key={key} className="flex justify-between items-center">
-                      <span className="text-sm text-slate-600 capitalize">{key.replace('_', ' ')}:</span>
-                      <span className="text-sm font-semibold text-blue-700">{value}</span>
-                    </div>
-                  ))}
+                  {decision?.explanation?.factors &&
+                    Object.entries(decision.explanation.factors).map(([key, value]) => (
+                      <div key={key} className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 capitalize">
+                          {key.replace("_", " ")}:
+                        </span>
+                        <span className="text-sm font-semibold text-blue-700">
+                          {value}
+                        </span>
+                      </div>
+                    ))}
                 </div>
-              </motion.div>
-              
-              <motion.div 
-                className="p-4 bg-blue-100/80 backdrop-blur-sm rounded-xl border border-blue-200"
-                initial={{ x: 20 }}
-                animate={{ x: 0 }}
-              >
-                <p className="text-sm font-medium text-blue-900 mb-2">AI Reasoning:</p>
+              </div>
+                  
+              <div className="p-4 bg-blue-100/80 backdrop-blur-sm rounded-xl border border-blue-200">
+                <p className="text-sm font-medium text-blue-900 mb-2">
+                  AI Reasoning:
+                </p>
                 <p className="text-sm text-blue-800 leading-relaxed">
                   {decision?.explanation?.reasoning}
                 </p>
-              </motion.div>
+              </div>
             </div>
           </Card>
         </motion.div>
+                  
       </div>
 
       {/* Bottom Row: Alerts, Schedule, Analytics */}

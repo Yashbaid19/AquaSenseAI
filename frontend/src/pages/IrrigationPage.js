@@ -129,7 +129,7 @@ const IrrigationPage = () => {
           </div>
           <div>
             <p className="text-sm text-slate-600 mb-2">Status</p>
-            <p className={`text-2xl font-semibold text-${statusColor}-700`}>{prediction?.status.toUpperCase()}</p>
+            <p className={`text-2xl font-semibold text-${statusColor}-700`}>{prediction?.status.toUpperCase()||"N/A"}</p>
           </div>
           <div>
             <p className="text-sm text-slate-600 mb-2">Recommendation</p>

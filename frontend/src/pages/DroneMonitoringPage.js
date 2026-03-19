@@ -1,198 +1,219 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Card } from '@/components/ui/card';
-import { Plane, AlertTriangle, MapPin } from 'lucide-react';
-import axios from 'axios';
-import Skeleton from 'react-loading-skeleton';
-import 'react-loading-skeleton/dist/skeleton.css';
+import { Camera, Radio, RefreshCw, AlertCircle, Wifi, Battery, MapPin } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const DRONE_CAMERA_URL = "https://camera-backend-ebe7.onrender.com/frame";
 
 const DroneMonitoringPage = () => {
-  const [droneData, setDroneData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [isLive, setIsLive] = useState(true);
+  const [imageError, setImageError] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    fetchDroneData();
-    const interval = setInterval(() => {
-      runAI(); 
-      fetchDroneData(); 
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-  
-const runAI = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    await axios.post(
-      '${API}/drone/process-frame',
-      {},
-      {
-        headers: { Authorization: 'Bearer ${token}' }
-      }
-    );
-  } catch (err) {
-    console.log("AI error", err);
-  }
-};
-
-  const fetchDroneData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('${API}/drone/latest-analysis', {
-        headers: { Authorization: 'Bearer ${token}' }
-      });
-      setDroneData(response.data);
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+    setImageError(false);
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton height={40} width={300} />
-        <Skeleton height={400} />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Skeleton height={300} />
-          <Skeleton height={300} />
-        </div>
-      </div>
-    );
-  }
-
-  const getZoneColor = (status) => {
-    if (status === 'Healthy') return 'emerald';
-    if (status === 'Dry') return 'red';
-    if (status === 'Overwatered') return 'blue';
-    return 'cyan';
+  const handleImageError = () => {
+    setImageError(true);
+    setIsLive(false);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-heading font-bold text-slate-900 mb-2">
-            Drone Monitoring
-          </h1>
-          <p className="text-lg text-slate-600">
-            Aerial imagery analysis and zone identification
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 border-2 border-emerald-300">
-          <Plane className="text-emerald-700" size={18} />
-          <span className="text-sm font-semibold text-emerald-800">Last Scan: Just Now</span>
-        </div>
-      </div>
-
-      {/* Drone Image */}
+      {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <Card className="p-6 rounded-2xl border-2 border-sky-200 overflow-hidden">
-          <div className="relative">
-            <img
-              src={'https://camera-backend-ebe7.onrender.com/frame?${Date.now()}'}
-              alt="Drone Field View"
-              className="w-full h-[400px] object-cover rounded-xl"
-            />
-            <div className="absolute top-4 right-4 px-4 py-2 rounded-lg bg-white/90 backdrop-blur-sm border border-slate-200">
-              <p className="text-sm font-semibold text-slate-700">Simulated Drone Analysis</p>
+        <h1 className="text-3xl font-bold text-slate-900">Drone Monitoring</h1>
+        <p className="text-slate-600 mt-2">Real-time aerial surveillance of your farm</p>
+      </motion.div>
+
+      {/* Status Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Connection</p>
+                <p className={`font-bold text-lg ${isLive ? 'text-green-600' : 'text-red-600'}`}>
+                  {isLive ? 'LIVE' : 'OFFLINE'}
+                </p>
+              </div>
+              <Wifi className={isLive ? 'text-green-600' : 'text-red-600'} size={32} />
             </div>
-          </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Battery</p>
+                <p className="font-bold text-lg text-blue-600">87%</p>
+              </div>
+              <Battery className="text-blue-600" size={32} />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Altitude</p>
+                <p className="font-bold text-lg text-cyan-600">45m</p>
+              </div>
+              <MapPin className="text-cyan-600" size={32} />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Signal</p>
+                <p className="font-bold text-lg text-purple-600">Strong</p>
+              </div>
+              <Radio className="text-purple-600" size={32} />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Live Feed */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+      >
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Camera size={24} />
+              Live Camera Feed
+            </CardTitle>
+            <Button 
+              onClick={handleRefresh}
+              size="sm"
+              variant="outline"
+            >
+              <RefreshCw size={16} className="mr-2" />
+              Refresh
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="relative aspect-video bg-slate-900 rounded-lg overflow-hidden">
+              {!imageError ? (
+                <>
+                  <img 
+                    key={refreshKey}
+                    src={`${DRONE_CAMERA_URL}?t=${Date.now()}`}
+                    alt="Live Drone Feed"
+                    className="w-full h-full object-cover"
+                    onError={handleImageError}
+                    onLoad={() => setIsLive(true)}
+                  />
+                  {isLive && (
+                    <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-lg">
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                      <span className="text-sm font-semibold">LIVE</span>
+                    </div>
+                  )}
+                  <div className="absolute bottom-4 left-4 bg-black/60 text-white px-4 py-2 rounded-lg backdrop-blur-sm">
+                    <p className="text-xs">Camera: Main Drone Feed</p>
+                    <p className="text-xs opacity-75">{new Date().toLocaleTimeString()}</p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-white">
+                  <AlertCircle size={64} className="mb-4 opacity-50" />
+                  <p className="text-xl mb-2">Camera Feed Unavailable</p>
+                  <p className="text-sm opacity-75 mb-4">Could not connect to drone camera</p>
+                  <Button onClick={handleRefresh} variant="secondary">
+                    <RefreshCw size={16} className="mr-2" />
+                    Try Again
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Camera Info */}
+            <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-slate-600">Resolution</p>
+                <p className="font-semibold">1920x1080</p>
+              </div>
+              <div>
+                <p className="text-slate-600">Frame Rate</p>
+                <p className="font-semibold">30 FPS</p>
+              </div>
+              <div>
+                <p className="text-slate-600">View Angle</p>
+                <p className="font-semibold">120°</p>
+              </div>
+            </div>
+          </CardContent>
         </Card>
       </motion.div>
 
+      {/* Drone Specifications */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Analysis Results */}
-        <Card className="p-6 rounded-2xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-sky-50">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="text-cyan-600" size={24} />
-            <h3 className="text-xl font-heading font-semibold text-slate-900">AI Analysis</h3>
-          </div>
-          <p className="text-slate-700 mb-6">{droneData?.analysis_result}</p>
-          
-          <div>
-            <h4 className="text-lg font-semibold text-slate-900 mb-3">Dry Zones Detected</h4>
-            <div className="space-y-2">
-              {droneData?.dry_zones?.map((zone, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-center gap-3 p-3 bg-red-50 border-2 border-red-200 rounded-lg"
-                >
-                  <MapPin className="text-red-600" size={18} />
-                  <span className="font-semibold text-red-700">{zone}</span>
-                </motion.div>
-              ))}
+        <Card>
+          <CardHeader>
+            <CardTitle>Flight Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Flight Time</span>
+                <span className="font-semibold">18 min 32 sec</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Distance Covered</span>
+                <span className="font-semibold">2.4 km</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Max Speed</span>
+                <span className="font-semibold">15 m/s</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">GPS Accuracy</span>
+                <span className="font-semibold">±0.5m</span>
+              </div>
             </div>
-          </div>
+          </CardContent>
         </Card>
 
-        {/* Zone Details */}
-        <Card className="p-6 rounded-2xl border-2 border-slate-200">
-          <h3 className="text-xl font-heading font-semibold text-slate-900 mb-4">Zone Details</h3>
-          <div className="space-y-3">
-            {droneData?.zones && Object.entries(droneData.zones).map(([name, data], index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`p-4 rounded-xl border-2 border-${getZoneColor(data.status)}-200 bg-${getZoneColor(data.status)}-50`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-slate-900">{name}</h4>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold bg-${getZoneColor(data.status)}-100 text-${getZoneColor(data.status)}-700`}>
-                    {data.status}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-600 mb-1">
-                  Moisture: <span className="font-semibold">{data.moisture_level}%</span>
-                </p>
-                <p className="text-sm text-slate-600">
-                  Action: <span className="font-semibold">{data.action}</span>
-                </p>
-              </motion.div>
-            ))}
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Mission Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Mission Type</span>
+                <span className="font-semibold">Area Survey</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Area Covered</span>
+                <span className="font-semibold">12.5 acres</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Images Captured</span>
+                <span className="font-semibold">143 photos</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Mission Progress</span>
+                <span className="font-semibold text-green-600">Active</span>
+              </div>
+            </div>
+          </CardContent>
         </Card>
       </div>
-
-      {/* Heatmap Info */}
-      <Card className="p-6 rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="mb-4">
-          <h3 className="text-xl font-heading font-semibold text-slate-900">Irrigation Heatmap Legend</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center gap-3 p-4 bg-emerald-100 border-2 border-emerald-300 rounded-xl">
-            <div className="w-4 h-4 rounded-full bg-emerald-500"></div>
-            <div>
-              <p className="font-semibold text-emerald-900">Healthy Zones</p>
-              <p className="text-sm text-emerald-700">Optimal moisture levels</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-4 bg-cyan-100 border-2 border-cyan-300 rounded-xl">
-            <div className="w-4 h-4 rounded-full bg-cyan-500"></div>
-            <div>
-              <p className="font-semibold text-cyan-900">Moderate Zones</p>
-              <p className="text-sm text-cyan-700">Requires monitoring</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-4 bg-red-100 border-2 border-red-300 rounded-xl">
-            <div className="w-4 h-4 rounded-full bg-red-500"></div>
-            <div>
-              <p className="font-semibold text-red-900">Critical Zones</p>
-              <p className="text-sm text-red-700">Immediate irrigation needed</p>
-            </div>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 };

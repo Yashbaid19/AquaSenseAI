@@ -124,6 +124,7 @@ async def get_latest_sensor_data(user_id: str = Depends(get_current_user_id)):
         sort=[("timestamp", -1)]
     )
     
+    # If no data → create mock
     if not latest:
         mock_data = generate_mock_sensor_data()
         mock_data.update({
@@ -132,7 +133,29 @@ async def get_latest_sensor_data(user_id: str = Depends(get_current_user_id)):
         })
         await sensor_readings_collection.insert_one(mock_data.copy())
         latest = mock_data
-    
+
+    # ✅ WEATHER SAFE FETCH (NON-BLOCKING STYLE)
+    rain = 0
+    humidity = latest.get("humidity", 50)
+
+    try:
+        if OPENWEATHER_API_KEY:
+            timeout = aiohttp.ClientTimeout(total=2)  # prevent delay
+            url = f"http://api.openweathermap.org/data/2.5/weather?q=Delhi&appid={OPENWEATHER_API_KEY}&units=metric"
+
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        rain = data.get("rain", {}).get("1h", 0)
+                        humidity = data.get("main", {}).get("humidity", humidity)
+    except Exception as e:
+        print("Weather error:", e)
+
+    # ✅ ADD WEATHER DATA
+    latest["rain_probability"] = rain
+    latest["humidity"] = humidity
+
     return {
         **latest,
         "irrigation_status": "optimal" if latest.get("soil_moisture", 0) > 30 else "needs_irrigation"
