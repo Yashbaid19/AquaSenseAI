@@ -133,16 +133,6 @@ const AppRoutes = () => {
         }
       />
       <Route
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <SettingsPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/ai-chat"
         element={
           <ProtectedRoute>
@@ -158,6 +148,16 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <Layout>
               <AdvancedAnalyticsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SettingsPage />
             </Layout>
           </ProtectedRoute>
         }
