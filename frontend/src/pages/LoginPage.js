@@ -29,7 +29,7 @@ const LoginPage = () => {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       toast.success('Login successful!');
-      navigate('/dashboard');
+      window.location.href = '/dashboard';
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Login failed');
     } finally {
