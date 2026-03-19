@@ -124,6 +124,13 @@ async def get_latest_sensor_data(user_id: str = Depends(get_current_user_id)):
         sort=[("timestamp", -1)]
     )
     
+    # If no data for user, try default_user (ESP32 data)
+    if not latest:
+        latest = await sensor_readings_collection.find_one(
+            {"user_id": "default_user"},
+            {"_id": 0},
+            sort=[("timestamp", -1)]
+        )
     # If no data → create mock
     if not latest:
         mock_data = generate_mock_sensor_data()
@@ -216,6 +223,14 @@ async def get_irrigation_prediction(user_id: str = Depends(get_current_user_id))
         {"_id": 0},
         sort=[("timestamp", -1)]
     )
+    
+    # Try default_user if no data for this user
+    if not latest:
+        latest = await sensor_readings_collection.find_one(
+            {"user_id": "default_user"},
+            {"_id": 0},
+            sort=[("timestamp", -1)]
+        )
     
     if not latest:
         mock_data = generate_mock_sensor_data()
@@ -498,15 +513,27 @@ async def ingest_sensor_data(data: dict):
     device_id = data.get("device_id", "ESP32_DEFAULT")
     user_id = data.get("user_id", "default_user")
     
+    # Get raw soil moisture value
+    raw_soil = data.get("soil_moisture", data.get("soil", 0))
+    
+    # Convert raw ADC value (0-4095 for ESP32) to percentage (0-100%)
+    # Lower ADC = More moisture, Higher ADC = Less moisture
+    if raw_soil > 100:  # It's a raw ADC value
+        # Invert and map: 4095 (dry) -> 0%, 0 (wet) -> 100%
+        soil_moisture_percent = max(0, min(100, 100 - (raw_soil / 4095 * 100)))
+    else:
+        soil_moisture_percent = raw_soil  # Already in percentage
+    
     sensor_doc = {
         "user_id": user_id,
         "device_id": device_id,
-        "soil_moisture": data.get("soil_moisture", data.get("soil", 0)),
+        "soil_moisture": round(soil_moisture_percent, 1),
         "temperature": data.get("temperature", 0),
         "humidity": data.get("humidity", 0),
         "soil_temp": data.get("soil_temp", 0),
         "water_stress_index": data.get("water_stress_index", round(random.uniform(0.1, 0.9), 2)),
-        "timestamp": data.get("timestamp", datetime.now(timezone.utc).isoformat())
+        "timestamp": data.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        "raw_soil_value": raw_soil  # Keep raw value for reference
     }
     
     # Store in database
