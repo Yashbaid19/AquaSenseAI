@@ -159,20 +159,29 @@ async def login(request: LoginRequest):
 # Sensor Endpoints
 @api_router.get("/sensors/latest")
 async def get_latest_sensor_data(user_id: str = Depends(get_current_user_id)):
-    latest = await sensor_readings_collection.find_one(
+    # Get latest from both user and default_user (ESP32), pick most recent
+    user_data = await sensor_readings_collection.find_one(
         {"user_id": user_id},
         {"_id": 0},
         sort=[("timestamp", -1)]
     )
-    
-    # If no data for user, try default_user (ESP32 data)
-    if not latest:
-        latest = await sensor_readings_collection.find_one(
-            {"user_id": "default_user"},
-            {"_id": 0},
-            sort=[("timestamp", -1)]
-        )
-    # If no data → create mock
+    esp32_data = await sensor_readings_collection.find_one(
+        {"user_id": "default_user"},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+
+    # Pick whichever is more recent
+    latest = None
+    if user_data and esp32_data:
+        user_ts = user_data.get("timestamp", "")
+        esp_ts = esp32_data.get("timestamp", "")
+        latest = esp32_data if esp_ts > user_ts else user_data
+    elif esp32_data:
+        latest = esp32_data
+    elif user_data:
+        latest = user_data
+
     if not latest:
         mock_data = generate_mock_sensor_data()
         mock_data.update({
@@ -214,12 +223,14 @@ async def get_latest_sensor_data(user_id: str = Depends(get_current_user_id)):
 
 @api_router.get("/sensors/history")
 async def get_sensor_history(user_id: str = Depends(get_current_user_id)):
+    # Get data from both the user and ESP32 default_user
     readings = await sensor_readings_collection.find(
-        {"user_id": user_id},
+        {"user_id": {"$in": [user_id, "default_user"]}},
         {"_id": 0}
     ).sort("timestamp", -1).limit(50).to_list(50)
-    
-    if len(readings) < 20:
+
+    # Only generate mock data if absolutely no readings exist
+    if len(readings) == 0:
         for i in range(20):
             mock_data = generate_mock_sensor_data()
             mock_data.update({
@@ -227,12 +238,12 @@ async def get_sensor_history(user_id: str = Depends(get_current_user_id)):
                 "timestamp": (datetime.now(timezone.utc) - timedelta(hours=i)).isoformat()
             })
             await sensor_readings_collection.insert_one(mock_data)
-        
+
         readings = await sensor_readings_collection.find(
             {"user_id": user_id},
             {"_id": 0}
         ).sort("timestamp", -1).limit(50).to_list(50)
-    
+
     return readings
 
 async def get_weather_safe():
@@ -261,19 +272,25 @@ async def get_weather_safe():
 # Irrigation Endpoint
 @api_router.get("/irrigation/predict")
 async def get_irrigation_prediction(user_id: str = Depends(get_current_user_id)):
-    latest = await sensor_readings_collection.find_one(
+    # Get latest from both user and default_user, prefer most recent
+    user_data = await sensor_readings_collection.find_one(
         {"user_id": user_id},
         {"_id": 0},
         sort=[("timestamp", -1)]
     )
-    
-    # Try default_user if no data for this user
-    if not latest:
-        latest = await sensor_readings_collection.find_one(
-            {"user_id": "default_user"},
-            {"_id": 0},
-            sort=[("timestamp", -1)]
-        )
+    esp32_data = await sensor_readings_collection.find_one(
+        {"user_id": "default_user"},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+
+    latest = None
+    if user_data and esp32_data:
+        latest = esp32_data if esp32_data.get("timestamp", "") > user_data.get("timestamp", "") else user_data
+    elif esp32_data:
+        latest = esp32_data
+    elif user_data:
+        latest = user_data
     
     if not latest:
         mock_data = generate_mock_sensor_data()
