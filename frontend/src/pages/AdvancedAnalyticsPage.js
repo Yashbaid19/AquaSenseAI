@@ -49,47 +49,56 @@ const AdvancedAnalyticsPage = () => {
     const svg = d3.select(heatmapRef.current);
     svg.selectAll('*').remove();
 
-    const width = heatmapRef.current.clientWidth;
+    const width = heatmapRef.current.clientWidth || 400;
     const height = 300;
-    const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+    const margin = { top: 20, right: 20, bottom: 60, left: 60 };
 
-    const data = patterns.pattern_data.slice(-14);
+    const data = (patterns.pattern_data || []).slice(-14);
+    if (data.length === 0) {
+      svg.append('text')
+        .attr('x', width / 2)
+        .attr('y', height / 2)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '14px')
+        .style('fill', '#64748b')
+        .text('No irrigation pattern data available');
+      return;
+    }
 
-    // Create scales
+    const maxWater = d3.max(data, d => d.water_quantity) || 10;
+
     const xScale = d3.scaleBand()
       .domain(data.map(d => d.date))
       .range([margin.left, width - margin.right])
-      .padding(0.1);
+      .padding(0.15);
 
     const yScale = d3.scaleLinear()
-      .domain([0, d3.max(data, d => d.water_quantity)])
+      .domain([0, maxWater])
       .nice()
       .range([height - margin.bottom, margin.top]);
 
     const colorScale = d3.scaleSequential()
-      .domain([0, d3.max(data, d => d.water_quantity)])
+      .domain([0, maxWater])
       .interpolator(d3.interpolateRgb('#34D399', '#06B6D4'));
 
     const g = svg.append('g');
 
-    // Draw bars
     g.selectAll('rect')
       .data(data)
       .join('rect')
       .attr('x', d => xScale(d.date))
       .attr('y', d => yScale(d.water_quantity))
       .attr('width', xScale.bandwidth())
-      .attr('height', d => height - margin.bottom - yScale(d.water_quantity))
+      .attr('height', d => Math.max(0, height - margin.bottom - yScale(d.water_quantity)))
       .attr('fill', d => colorScale(d.water_quantity))
       .attr('rx', 4)
-      .on('mouseover', function(event, d) {
+      .on('mouseover', function() {
         d3.select(this).attr('opacity', 0.7);
       })
       .on('mouseout', function() {
         d3.select(this).attr('opacity', 1);
       });
 
-    // X axis
     g.append('g')
       .attr('transform', `translate(0,${height - margin.bottom})`)
       .call(d3.axisBottom(xScale))
@@ -98,19 +107,17 @@ const AdvancedAnalyticsPage = () => {
       .style('text-anchor', 'end')
       .style('font-size', '10px');
 
-    // Y axis
     g.append('g')
       .attr('transform', `translate(${margin.left},0)`)
       .call(d3.axisLeft(yScale));
 
-    // Y axis label
     g.append('text')
       .attr('transform', 'rotate(-90)')
       .attr('y', margin.left - 45)
       .attr('x', -(height / 2))
       .attr('text-anchor', 'middle')
       .style('font-size', '12px')
-      .text('Water Quantity (L/m²)');
+      .text('Water Quantity (L/m\u00B2)');
   };
 
   if (loading) {

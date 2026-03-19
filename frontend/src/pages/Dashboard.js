@@ -39,16 +39,16 @@ const Dashboard = () => {
       
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [sensorRes, decisionRes, analyticsRes, historyRes] = await Promise.all([
+      const [sensorRes, decisionRes, analyticsRes, historyRes, zonesRes, alertsRes, scheduleRes] = await Promise.all([
         axios.get(`${API}/sensors/latest`, { headers }),
         axios.get(`${API}/irrigation/predict`, { headers }),
-        axios.get(`${API}/analytics/water`, { headers }).catch(() => ({data: {efficiency_score: 85}})),
-        axios.get(`${API}/sensors/history`, { headers }).catch(() => ({data: []}))
+        axios.get(`${API}/analytics/water`, { headers }).catch(() => ({ data: { efficiency_score: 0, water_saved_percent: 0, before_usage: 0, after_usage: 0, efficiency_average: 0 } })),
+        axios.get(`${API}/sensors/history`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/zones`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/alerts`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/schedule`, { headers }).catch(() => ({ data: [] }))
       ]);
-      
-      console.log("Sensor Data:", sensorRes.data);
-      console.log("Prediction:", decisionRes.data);
-      
+
       setSensorData(sensorRes.data);
       setDecision({
         decision: decisionRes.data.recommendation || "Monitor",
@@ -56,19 +56,19 @@ const Dashboard = () => {
         water_quantity: decisionRes.data.water_quantity || 0,
         confidence: decisionRes.data.confidence || 85,
         priority: decisionRes.data.status || "monitor",
-        explanation:{
-          factors:{
+        explanation: {
+          factors: {
             soil_moisture: sensorRes.data.soil_moisture + "%",
-            temperature: sensorRes.data.temperature + "°C",
+            temperature: sensorRes.data.temperature + "\u00B0C",
             humidity: sensorRes.data.humidity + "%",
             rain_probability: (sensorRes.data.rain_probability || 0) + "%"
           },
           reasoning: decisionRes.data.recommendation || "Analyzing..."
         }
       });
-      setZones([]);
-      setAlerts([]);
-      setSchedule([]);
+      setZones(Array.isArray(zonesRes.data) ? zonesRes.data : []);
+      setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : []);
+      setSchedule(Array.isArray(scheduleRes.data) ? scheduleRes.data : []);
       setAnalytics(analyticsRes.data);
       setHistory(Array.isArray(historyRes.data) ? historyRes.data.slice(-20) : []);
       setDemoMode(false);
@@ -451,19 +451,19 @@ const Dashboard = () => {
                 whileHover={{ scale: 1.05 }}
               >
                 <p className="text-sm text-slate-600 mb-1">Efficiency Score</p>
-                <p className="text-4xl font-heading font-bold text-cyan-700">{analytics?.efficiency_average}%</p>
+                <p className="text-4xl font-heading font-bold text-cyan-700">{analytics?.efficiency_average ?? 0}%</p>
               </motion.div>
               <div className="p-3 bg-white/80 backdrop-blur-sm rounded-xl border border-white/40">
                 <p className="text-xs text-slate-600 mb-2">Water Saved</p>
-                <p className="text-2xl font-heading font-bold text-cyan-700">{analytics?.water_saved_percent}%</p>
+                <p className="text-2xl font-heading font-bold text-cyan-700">{analytics?.water_saved_percent ?? 0}%</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <p className="text-slate-500">Before</p>
-                    <p className="font-semibold text-slate-700">{analytics?.before_usage}L</p>
+                    <p className="font-semibold text-slate-700">{analytics?.before_usage ?? 0} L</p>
                   </div>
                   <div>
                     <p className="text-slate-500">After</p>
-                    <p className="font-semibold text-cyan-700">{analytics?.after_usage}L</p>
+                    <p className="font-semibold text-cyan-700">{analytics?.after_usage ?? 0} L</p>
                   </div>
                 </div>
               </div>
