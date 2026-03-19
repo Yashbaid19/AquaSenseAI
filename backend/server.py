@@ -6,11 +6,16 @@ from pathlib import Path
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
+from fastapi import Request
+from fastapi.responses import FileResponse
 import os
 import logging
+from PIL import Image
+import io
 import random
 import aiohttp
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -157,6 +162,28 @@ async def get_sensor_history(user_id: str = Depends(get_current_user_id)):
     
     return readings
 
+async def get_weather_safe():
+    try:
+        if not OPENWEATHER_API_KEY:
+            return 0, 50
+
+        url = f"http://api.openweathermap.org/data/2.5/weather?q=Delhi&appid={OPENWEATHER_API_KEY}&units=metric"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=2) as response:
+                if response.status != 200:
+                    return 0, 50
+
+                data = await response.json()
+
+        rain = data.get("rain", {}).get("1h", 0)
+        humidity = data.get("main", {}).get("humidity", 50)
+
+        return rain, humidity
+
+    except Exception as e:
+        print("Weather error:", e)
+        return 0, 50
 
 # Irrigation Endpoint
 @api_router.get("/irrigation/predict")
@@ -174,8 +201,10 @@ async def get_irrigation_prediction(user_id: str = Depends(get_current_user_id))
         latest = mock_data
     
     soil_moisture = latest.get("soil_moisture", 30)
-    rain_expected = random.choice([True, False])
-    rain_hours = random.randint(6, 12)
+    rain_mm, humidity = await get_weather_safe()
+
+    rain_expected = rain_mm > 0
+    rain_hours = 2 if rain_expected else 0
     
     if soil_moisture > 35:
         recommendation = "No irrigation needed"
@@ -213,13 +242,20 @@ async def get_irrigation_prediction(user_id: str = Depends(get_current_user_id))
     })
     
     return {
-        "recommended_time": recommended_time,
+        "decision": recommendation,
+        "time": recommended_time,
         "water_quantity": water_quantity,
-        "crop_stress_level": crop_stress,
-        "rain_forecast": f"Rain expected in {rain_hours} hours" if rain_expected else "No rain expected in next 24 hours",
-        "recommendation": recommendation,
-        "status": status,
-        "current_soil_moisture": soil_moisture
+        "confidence": round(random.uniform(0.7, 0.95), 2),  # temp AI confidence
+        "priority": status.upper(),
+        "rain_probability": rain_mm * 10,  # simple %
+        "explanation": {
+            "factors": {
+                "soil_moisture": soil_moisture,
+                "rain_forecast": rain_expected,
+                "humidity": humidity
+            },
+            "reasoning": recommendation
+        }
     }
 
 
@@ -407,13 +443,6 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup_event_extended():
-    global notification_service
-    await init_db()
-    notification_service = get_notification_service(db)
-    logging.info("Database and services initialized")
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -442,18 +471,17 @@ async def startup_event_extended():
 @api_router.post("/iot/sensor-data")
 async def ingest_sensor_data(data: dict):
     """Ingest real-time sensor data from ESP32 devices"""
-    device_id = data.get("device_id")
-    user_id = data.get("user_id")  # Device should send user_id
-    
-    if not device_id or not user_id:
-        raise HTTPException(status_code=400, detail="device_id and user_id required")
+    # Use defaults if not provided
+    device_id = data.get("device_id", "ESP32_DEFAULT")
+    user_id = data.get("user_id", "default_user")
     
     sensor_doc = {
         "user_id": user_id,
         "device_id": device_id,
-        "soil_moisture": data.get("soil_moisture"),
-        "temperature": data.get("temperature"),
-        "humidity": data.get("humidity"),
+        "soil_moisture": data.get("soil_moisture", data.get("soil", 0)),
+        "temperature": data.get("temperature", 0),
+        "humidity": data.get("humidity", 0),
+        "soil_temp": data.get("soil_temp", 0),
         "water_stress_index": data.get("water_stress_index", round(random.uniform(0.1, 0.9), 2)),
         "timestamp": data.get("timestamp", datetime.now(timezone.utc).isoformat())
     }
@@ -596,4 +624,122 @@ async def get_unread_count(user_id: str = Depends(get_current_user_id)):
     return {"unread_count": len(notifications)}
 
 # Include router after all routes are defined
+
+
+# Drone Image Processing Endpoints
+from fastapi import File, UploadFile
+from drone_processor import drone_processor
+import base64
+
+@api_router.post("/drone/process-frame")
+async def process_drone_frame(user_id: str = Depends(get_current_user_id)):
+    frame_path = "frame.jpg"
+    if not os.path.exists(frame_path):
+        raise HTTPException(status_code=404, detail="No frame available")
+    image = Image.open(frame_path)
+
+    # Process with model
+    segmented_image, zones = drone_processor.process_image(image)
+
+    timestamp = datetime.now(timezone.utc).isoformat().replace(':', '-')
+
+    original_path = f"/app/backend/uploads/drone_original_{timestamp}.jpg"
+    image.save(original_path)
+
+    segmented_path = f"/app/backend/uploads/drone_segmented_{timestamp}.jpg"
+    segmented_image.save(segmented_path)
+
+    buffer = io.BytesIO()
+    segmented_image.save(buffer, format="JPEG")
+    segmented_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+    await drone_analysis_collection.insert_one({
+        "user_id": user_id,
+        "timestamp": timestamp,
+        "original_image_path": original_path,
+        "segmented_image_path": segmented_path,
+        "zones": zones,
+        "total_zones": len(zones)
+    })
+
+    return {
+        "status": "success",
+        "segmented_image": f"data:image/jpeg;base64,{segmented_base64}",
+        "zones": zones,
+        "timestamp": timestamp
+    }
+
+
+
+@api_router.post("/drone/upload-image")
+async def upload_and_process_image(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id)
+):
+    """Upload and process a drone image manually"""
+    # Read uploaded file
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents))
+    
+    # Process with model
+    segmented_image, zones = drone_processor.process_image(image)
+    
+    # Save images
+    timestamp = datetime.now(timezone.utc).isoformat().replace(':', '-')
+    
+    # Save original
+    original_path = f"/app/backend/uploads/drone_original_uploaded_{timestamp}.jpg"
+    image.save(original_path)
+    
+    # Save segmented
+    segmented_path = f"/app/backend/uploads/drone_segmented_uploaded_{timestamp}.jpg"
+    segmented_image.save(segmented_path)
+    
+    # Convert segmented to base64 for response
+    buffer = io.BytesIO()
+    segmented_image.save(buffer, format="JPEG")
+    segmented_base64 = base64.b64encode(buffer.getvalue()).decode()
+    
+    # Store in database
+    analysis_doc = {
+        "user_id": user_id,
+        "timestamp": timestamp,
+        "original_image_path": original_path,
+        "segmented_image_path": segmented_path,
+        "zones": zones,
+        "total_zones": len(zones),
+        "source": "manual_upload"
+    }
+    await drone_analysis_collection.insert_one(analysis_doc)
+    
+    return {
+        "status": "success",
+        "segmented_image": f"data:image/jpeg;base64,{segmented_base64}",
+        "zones": zones
+    }
+
+
+@api_router.get("/drone/latest-analysis")
+async def get_latest_drone_analysis(user_id: str = Depends(get_current_user_id)):
+    """Get latest drone zone analysis"""
+    analysis = await drone_analysis_collection.find_one(
+        {"user_id": user_id},
+        sort=[("timestamp", -1)]
+    )
+    
+    if not analysis:
+        # Return demo data
+        return {
+            "zones": [
+                {"id": "Zone A", "label": "High Moisture", "coverage_percent": 25.0, "color": [0, 255, 0], "needs_irrigation": False},
+                {"id": "Zone B", "label": "Medium Moisture", "coverage_percent": 25.0, "color": [255, 255, 0], "needs_irrigation": False},
+                {"id": "Zone C", "label": "Low Moisture", "coverage_percent": 25.0, "color": [255, 165, 0], "needs_irrigation": True},
+                {"id": "Zone D", "label": "Very Low Moisture", "coverage_percent": 25.0, "color": [255, 0, 0], "needs_irrigation": True}
+            ],
+            "message": "Demo data - no real analysis yet"
+        }
+    
+    analysis["_id"] = str(analysis["_id"])
+    return analysis
+
 app.include_router(api_router)

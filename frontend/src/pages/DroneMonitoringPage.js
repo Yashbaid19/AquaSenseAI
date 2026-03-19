@@ -14,13 +14,33 @@ const DroneMonitoringPage = () => {
 
   useEffect(() => {
     fetchDroneData();
+    const interval = setInterval(() => {
+      runAI(); 
+      fetchDroneData(); 
+    }, 2000);
+    return () => clearInterval(interval);
   }, []);
+  
+const runAI = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    await axios.post(
+      '${API}/drone/process-frame',
+      {},
+      {
+        headers: { Authorization: 'Bearer ${token}' }
+      }
+    );
+  } catch (err) {
+    console.log("AI error", err);
+  }
+};
 
   const fetchDroneData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API}/drone/latest`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await axios.get('${API}/drone/latest-analysis', {
+        headers: { Authorization: 'Bearer ${token}' }
       });
       setDroneData(response.data);
     } catch (error) {
@@ -75,7 +95,7 @@ const DroneMonitoringPage = () => {
         <Card className="p-6 rounded-2xl border-2 border-sky-200 overflow-hidden">
           <div className="relative">
             <img
-              src={droneData?.image_url}
+              src={'https://camera-backend-ebe7.onrender.com/frame?${Date.now()}'}
               alt="Drone Field View"
               className="w-full h-[400px] object-cover rounded-xl"
             />

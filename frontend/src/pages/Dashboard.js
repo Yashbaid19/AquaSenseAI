@@ -22,6 +22,10 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchAllData();
+    const interval = setInterval(() =>{
+      fetchAllData();
+    },5000);
+    return () => ckearInterval(interval);
   }, []);
 
   const fetchAllData = async () => {
@@ -31,19 +35,15 @@ const Dashboard = () => {
 
       const [sensorRes, decisionRes, zonesRes, alertsRes, scheduleRes, analyticsRes, historyRes] = await Promise.all([
         axios.get(`${API}/sensors/latest`, { headers }),
-        axios.get(`${API}/irrigation/decision`, { headers }),
-        axios.get(`${API}/drone/zones`, { headers }),
-        axios.get(`${API}/dashboard/alerts`, { headers }),
-        axios.get(`${API}/dashboard/schedule`, { headers }),
+        axios.get(`${API}/irrigation/predict`, { headers }),
+        axios.get(`${API}/drone/latest-analysis`, { headers }),
         axios.get(`${API}/analytics/water`, { headers }),
         axios.get(`${API}/sensors/history`, { headers })
       ]);
-
+      console.log("History Data:",historyRes.data);
       setSensorData(sensorRes.data);
       setDecision(decisionRes.data);
       setZones(zonesRes.data);
-      setAlerts(alertsRes.data.alerts || []);
-      setSchedule(scheduleRes.data.schedule || []);
       setAnalytics(analyticsRes.data);
       setHistory(historyRes.data.reverse().slice(-20));
       setDemoMode(sensorRes.data.demo_mode || false);
@@ -77,7 +77,7 @@ const Dashboard = () => {
     return 'slate';
   };
 
-  const getZoneColor = (status) => {
+  const getZoneColor = (e) => {
     if (status === 'Healthy') return 'emerald';
     if (status === 'Dry') return 'red';
     if (status === 'Overwatered') return 'blue';
@@ -180,7 +180,7 @@ const Dashboard = () => {
                 >
                   <Sparkles className="text-cyan-600 mb-2" size={20} />
                   <p className="text-sm text-slate-600">Rain Probability</p>
-                  <p className="text-3xl font-heading font-bold text-cyan-700">{sensorData?.rain_probability}%</p>
+                  <p className="text-3xl font-heading font-bold text-cyan-700">{sensorData?.rain_probability || 0}%</p>
                 </motion.div>
               )}
             </div>
@@ -243,42 +243,50 @@ const Dashboard = () => {
       </div>
 
       {/* Middle Row: Zone Map + Explainable AI */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ZONE MAP */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="p-6 rounded-2xl border-2 border-slate-200 bg-white/80 backdrop-blur-sm shadow-xl">
-            <div className="flex items-center gap-2 mb-6">
-              <svg className="text-cyan-600" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 17l10 5 10-5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 12l10 5 10-5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <h3 className="text-xl font-heading font-semibold text-slate-900">Zone Map (Drone Analysis)</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {zones && Object.entries(zones.zones).map(([name, data], index) => (
-                <motion.div
-                  key={name}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.1 * index }}
-                  whileHover={{ scale: 1.05, y: -5 }}
-                  className={`p-4 rounded-xl border-2 border-${getZoneColor(data.status)}-300 bg-${getZoneColor(data.status)}-50 cursor-pointer`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-semibold text-slate-900">{name}</p>
-                    <span className={`w-3 h-3 rounded-full bg-${getZoneColor(data.status)}-500`}></span>
-                  </div>
-                  <p className={`text-sm font-bold text-${getZoneColor(data.status)}-700 mb-1`}>{data.status}</p>
-                  <p className="text-xs text-slate-600">{data.moisture_level}% moisture</p>
-                  <p className={`text-xs font-semibold text-${getPriorityColor(data.priority)}-600 mt-2`}>
-                    Priority: {data.priority}
-                  </p>
-                </motion.div>
-              ))}
-            </div>
-          </Card>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+      <Card className="p-6 rounded-2xl border-2 border-slate-200 bg-white/80 backdrop-blur-sm shadow-xl">
+
+      <h3 className="text-xl font-heading font-semibold text-slate-900 mb-4">
+        Zone Map (Drone Analysis)
+      </h3>
+
+      <div className="grid grid-cols-2 gap-4">
+      {zones?.map((zone, index) => (
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 * index }}
+          whileHover={{ scale: 1.05, y: -5 }}
+          className={`p-4 rounded-xl border-2 border-${getZoneColor(zone.status)}-300 bg-${getZoneColor(zone.status)}-50 cursor-pointer`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="font-semibold text-slate-900">
+              {zone.zone_name}
+            </p>
+          
+            {/* ✅ FIXED */}
+            <span
+              className={`w-3 h-3 rounded-full bg-${getZoneColor(zone.status)}-500`}
+            ></span>
+          </div>
+        
+          <p className={`text-sm font-bold text-${getZoneColor(zone.status)}-700 mb-1`}>
+            {zone.status}
+          </p>
+
+          <p className="text-xs text-slate-600">
+            {zone.soil_moisture}% moisture
+          </p>
         </motion.div>
+      ))}
+    </div>
+
+  </Card>
+</motion.div>
 
         {/* EXPLAINABLE AI */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -394,11 +402,11 @@ const Dashboard = () => {
                 whileHover={{ scale: 1.05 }}
               >
                 <p className="text-sm text-slate-600 mb-1">Efficiency Score</p>
-                <p className="text-4xl font-heading font-bold text-cyan-700">{analytics?.efficiency_score}%</p>
+                <p className="text-4xl font-heading font-bold text-cyan-700">{analytics?.efficiency_average}%</p>
               </motion.div>
               <div className="p-3 bg-white/80 backdrop-blur-sm rounded-xl border border-white/40">
                 <p className="text-xs text-slate-600 mb-2">Water Saved</p>
-                <p className="text-2xl font-heading font-bold text-cyan-700">{analytics?.water_saved_percent}%</p>
+                <p className="text-2xl font-heading font-bold text-cyan-700">{analytics?.water_saved_total}%</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <p className="text-slate-500">Before</p>
