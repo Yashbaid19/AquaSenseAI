@@ -296,7 +296,7 @@ const FarmZonesPage = () => {
               <div className="w-8 h-8 rounded" style={{backgroundColor: 'rgb(0,255,0)'}} />
               <div>
                 <p className="font-medium">High</p>
-                <p className="text-xs text-slate-600">>40% moisture</p>
+                <p className="text-xs text-slate-600">&gt;40% moisture</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -317,7 +317,7 @@ const FarmZonesPage = () => {
               <div className="w-8 h-8 rounded" style={{backgroundColor: 'rgb(255,0,0)'}} />
               <div>
                 <p className="font-medium">Critical</p>
-                <p className="text-xs text-slate-600"><20% moisture</p>
+                <p className="text-xs text-slate-600">&lt;20% moisture</p>
               </div>
             </div>
           </div>
