@@ -17,6 +17,12 @@ import WaterAnalyticsPage from './pages/WaterAnalyticsPage';
 import AIChatPage from './pages/AIChatPage';
 import SettingsPage from './pages/SettingsPage';
 import AdvancedAnalyticsPage from './pages/AdvancedAnalyticsPage';
+import CropPredictionPage from './pages/CropPredictionPage';
+import YieldPredictionPage from './pages/YieldPredictionPage';
+import MandiPricingPage from './pages/MandiPricingPage';
+import MarketTrendsPage from './pages/MarketTrendsPage';
+import EquipmentRentalPage from './pages/EquipmentRentalPage';
+import FinancialSupportPage from './pages/FinancialSupportPage';
 
 // Layout
 import DashboardLayout from './components/DashboardLayout';
@@ -59,6 +65,12 @@ function App() {
             <Route path="rover" element={<RoverMonitoringPage />} />
             <Route path="analytics" element={<WaterAnalyticsPage />} />
             <Route path="chat" element={<AIChatPage />} />
+            <Route path="crop-prediction" element={<CropPredictionPage />} />
+            <Route path="yield-prediction" element={<YieldPredictionPage />} />
+            <Route path="mandi" element={<MandiPricingPage />} />
+            <Route path="market-trends" element={<MarketTrendsPage />} />
+            <Route path="equipment" element={<EquipmentRentalPage />} />
+            <Route path="finance" element={<FinancialSupportPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>

@@ -7,7 +7,6 @@ import {
   MessageSquare, 
   BarChart3, 
   LogOut, 
-  User, 
   Droplet, 
   Map, 
   Plane, 
@@ -17,7 +16,12 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Truck
+  Truck,
+  Leaf,
+  TrendingUp,
+  Store,
+  Wrench,
+  Wallet
 } from 'lucide-react';
 
 const DashboardLayout = () => {
@@ -42,8 +46,15 @@ const DashboardLayout = () => {
     { path: '/drone', icon: Plane, label: 'Drone Monitor' },
     { path: '/rover', icon: Truck, label: 'Rover Monitor' },
     { path: '/analytics', icon: Gauge, label: 'Water Analytics' },
-    { path: '/chat', icon: MessageSquare, label: 'AI Chat' },
-    { path: '/advanced-analytics', icon: BarChart3, label: 'Advanced Analytics' },
+    { path: '/chat', icon: MessageSquare, label: 'AI Advisor' },
+    { section: 'KrishiRakshak' },
+    { path: '/crop-prediction', icon: Leaf, label: 'Crop Prediction' },
+    { path: '/yield-prediction', icon: TrendingUp, label: 'Yield Prediction' },
+    { path: '/mandi', icon: Store, label: 'Mandi Pricing' },
+    { path: '/market-trends', icon: BarChart3, label: 'Market Trends' },
+    { path: '/equipment', icon: Wrench, label: 'Equipment Rental' },
+    { path: '/finance', icon: Wallet, label: 'Financial Support' },
+    { section: 'System' },
     { path: '/settings', icon: Settings, label: 'Settings' }
   ];
 
@@ -72,8 +83,15 @@ const DashboardLayout = () => {
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {navItems.map((item) => {
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {navItems.map((item, idx) => {
+            if (item.section) {
+              return sidebarOpen ? (
+                <div key={item.section} className="pt-4 pb-1 px-4">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.section}</p>
+                </div>
+              ) : <hr key={item.section} className="border-slate-200 my-2" />;
+            }
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
             
@@ -81,23 +99,16 @@ const DashboardLayout = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
                   isActive
                     ? 'bg-cyan-100 text-cyan-700 font-semibold shadow-sm'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
                 title={!sidebarOpen ? item.label : ''}
               >
-                <Icon size={20} className="flex-shrink-0" />
+                <Icon size={18} className="flex-shrink-0" />
                 {sidebarOpen && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="text-sm"
-                  >
-                    {item.label}
-                  </motion.span>
+                  <span className="text-sm">{item.label}</span>
                 )}
               </Link>
             );
@@ -193,8 +204,15 @@ const DashboardLayout = () => {
               </div>
 
               {/* Mobile Navigation */}
-              <nav className="p-4 space-y-2">
+              <nav className="p-4 space-y-1">
                 {navItems.map((item) => {
+                  if (item.section) {
+                    return (
+                      <div key={item.section} className="pt-3 pb-1 px-4">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.section}</p>
+                      </div>
+                    );
+                  }
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;
                   
@@ -203,13 +221,13 @@ const DashboardLayout = () => {
                       key={item.path}
                       to={item.path}
                       onClick={() => setMobileMenuOpen(false)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
                         isActive
                           ? 'bg-cyan-100 text-cyan-700 font-semibold'
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      <Icon size={20} />
+                      <Icon size={18} />
                       <span className="text-sm">{item.label}</span>
                     </Link>
                   );
@@ -252,7 +270,7 @@ const DashboardLayout = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-slate-900">
-                {navItems.find(item => item.path === location.pathname)?.label || 'Dashboard'}
+                {navItems.find(item => item.path === location.pathname)?.label || 'AquaSense AI'}
               </h1>
               <p className="text-sm text-slate-600 mt-1">
                 Welcome back, {user?.name || 'User'}
