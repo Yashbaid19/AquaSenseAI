@@ -975,4 +975,49 @@ async def get_latest_drone_analysis(user_id: str = Depends(get_current_user_id))
     analysis["_id"] = str(analysis["_id"])
     return analysis
 
+
+# Rover Crop Health Analysis Endpoints
+from rover_processor import rover_analyzer
+
+ROVER_FEED_URL = "https://camera-backend-nhqu.onrender.com/frame"
+
+@api_router.get("/rover/analyze-frame")
+async def analyze_rover_frame(user_id: str = Depends(get_current_user_id)):
+    """Fetch a frame from the rover camera and analyze crop health"""
+    if rover_analyzer is None:
+        raise HTTPException(status_code=500, detail="Rover model not loaded")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(ROVER_FEED_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=502, detail="Failed to fetch rover frame")
+                image_bytes = await resp.read()
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        result = rover_analyzer.analyze(image)
+        result["source"] = "live_feed"
+        result["timestamp"] = datetime.now(timezone.utc).isoformat()
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@api_router.post("/rover/analyze-upload")
+async def analyze_rover_upload(file: UploadFile = File(...), user_id: str = Depends(get_current_user_id)):
+    """Analyze an uploaded image for crop health"""
+    if rover_analyzer is None:
+        raise HTTPException(status_code=500, detail="Rover model not loaded")
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        result = rover_analyzer.analyze(image)
+        result["source"] = "upload"
+        result["filename"] = file.filename
+        result["timestamp"] = datetime.now(timezone.utc).isoformat()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
 app.include_router(api_router)
