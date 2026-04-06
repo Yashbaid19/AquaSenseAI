@@ -57,7 +57,7 @@ class NotificationService:
         await self.notifications_collection.update_many(query, {'$set': {'read': True}})
 
     async def check_sensor_alerts(self, user_id: str, sensor_data: Dict):
-        """Check sensor data and create alerts if needed"""
+        """Check sensor data and create alerts if needed, and send push notifications"""
         alerts = []
 
         # Check soil moisture
@@ -88,7 +88,7 @@ class NotificationService:
                 user_id=user_id,
                 notification_type='warning',
                 title='High Temperature Alert',
-                message=f'Temperature is {temperature}°C. Crops may need extra water.',
+                message=f'Temperature is {temperature}C. Crops may need extra water.',
                 data={'temperature': temperature}
             )
             alerts.append(alert)
@@ -105,7 +105,31 @@ class NotificationService:
             )
             alerts.append(alert)
 
+        # Send Firebase push for critical alerts
+        if alerts:
+            try:
+                from firebase_push import send_sensor_alert_push
+                user_tokens = await self._get_user_push_tokens(user_id)
+                for alert in alerts:
+                    if alert.get('type') == 'critical':
+                        await send_sensor_alert_push(
+                            user_tokens=user_tokens,
+                            alert_type=alert['type'],
+                            title=alert['title'],
+                            message=alert['message'],
+                            sensor_data=sensor_data
+                        )
+            except Exception:
+                pass  # Firebase is optional
+
         return alerts
+
+    async def _get_user_push_tokens(self, user_id: str) -> List[str]:
+        """Get push notification tokens for a user"""
+        doc = await self.db.push_tokens.find_one({"user_id": user_id}, {"_id": 0})
+        if doc:
+            return doc.get("tokens", [])
+        return []
 
     async def create_rain_forecast_alert(self, user_id: str, hours_until_rain: int):
         """Create notification for upcoming rainfall"""

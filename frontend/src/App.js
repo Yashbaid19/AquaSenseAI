@@ -23,6 +23,7 @@ import MandiPricingPage from './pages/MandiPricingPage';
 import MarketTrendsPage from './pages/MarketTrendsPage';
 import EquipmentRentalPage from './pages/EquipmentRentalPage';
 import FinancialSupportPage from './pages/FinancialSupportPage';
+import HistoricalReportsPage from './pages/HistoricalReportsPage';
 
 // Layout
 import DashboardLayout from './components/DashboardLayout';
@@ -71,6 +72,7 @@ function App() {
             <Route path="market-trends" element={<MarketTrendsPage />} />
             <Route path="equipment" element={<EquipmentRentalPage />} />
             <Route path="finance" element={<FinancialSupportPage />} />
+            <Route path="reports" element={<HistoricalReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>

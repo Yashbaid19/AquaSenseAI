@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -21,21 +21,51 @@ import {
   TrendingUp,
   Store,
   Wrench,
-  Wallet
+  Wallet,
+  FileBarChart,
+  ChevronDown
 } from 'lucide-react';
+import axios from 'axios';
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [farms, setFarms] = useState([]);
+  const [activeFarm, setActiveFarm] = useState(null);
+  const [farmDropdownOpen, setFarmDropdownOpen] = useState(false);
   
-  // Get user from localStorage
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const token = localStorage.getItem('token');
+
+  useEffect(() => {
+    const fetchFarms = async () => {
+      try {
+        const res = await axios.get(`${API}/farms`, { headers: { Authorization: `Bearer ${token}` } });
+        setFarms(res.data);
+        const defaultFarm = res.data.find(f => f.is_default) || res.data[0];
+        if (defaultFarm) {
+          setActiveFarm(defaultFarm);
+          localStorage.setItem('active_farm', JSON.stringify(defaultFarm));
+        }
+      } catch (e) { /* skip on error */ }
+    };
+    if (token) fetchFarms();
+  }, [token]);
+
+  const switchFarm = (farm) => {
+    setActiveFarm(farm);
+    localStorage.setItem('active_farm', JSON.stringify(farm));
+    setFarmDropdownOpen(false);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('active_farm');
     navigate('/login');
   };
 
@@ -55,6 +85,7 @@ const DashboardLayout = () => {
     { path: '/equipment', icon: Wrench, label: 'Equipment Rental' },
     { path: '/finance', icon: Wallet, label: 'Financial Support' },
     { section: 'System' },
+    { path: '/reports', icon: FileBarChart, label: 'Historical Reports' },
     { path: '/settings', icon: Settings, label: 'Settings' }
   ];
 
@@ -265,7 +296,7 @@ const DashboardLayout = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar (Desktop only - shows user info) */}
+        {/* Top Bar (Desktop only - shows user info + farm selector) */}
         <div className="hidden md:block bg-white border-b border-slate-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -277,8 +308,37 @@ const DashboardLayout = () => {
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="px-4 py-2 bg-cyan-50 text-cyan-700 rounded-lg text-sm font-medium">
-                🌱 Farm Active
+              {/* Farm Selector */}
+              {farms.length > 0 && (
+                <div className="relative" data-testid="farm-selector">
+                  <button
+                    onClick={() => setFarmDropdownOpen(!farmDropdownOpen)}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-2 border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium hover:bg-emerald-100 transition-colors"
+                    data-testid="farm-selector-btn"
+                  >
+                    <Map size={16} />
+                    <span>{activeFarm?.name || 'Select Farm'}</span>
+                    <ChevronDown size={14} className={`transition-transform ${farmDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {farmDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 py-2" data-testid="farm-dropdown">
+                      {farms.map(farm => (
+                        <button
+                          key={farm.farm_id}
+                          onClick={() => switchFarm(farm)}
+                          className={`w-full text-left px-4 py-2.5 text-sm hover:bg-emerald-50 transition-colors ${activeFarm?.farm_id === farm.farm_id ? 'bg-emerald-50 text-emerald-800 font-semibold' : 'text-slate-700'}`}
+                          data-testid={`farm-option-${farm.farm_id}`}
+                        >
+                          <span className="block">{farm.name}</span>
+                          <span className="text-xs text-slate-500">{farm.location} - {farm.size_acres} acres</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="px-4 py-2 bg-cyan-50 text-cyan-700 rounded-lg text-sm font-medium" data-testid="farm-active-badge">
+                Farm Active
               </div>
             </div>
           </div>
