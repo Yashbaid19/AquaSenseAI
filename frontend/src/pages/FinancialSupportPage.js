@@ -123,16 +123,18 @@ const FinancialSupportPage = () => {
           <h3 className="text-base font-heading font-semibold text-slate-900">Central Schemes</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {schemes.central.map((s, i) => (
-              <Card key={i} className="p-5 rounded-2xl border-2 border-slate-200 hover:border-cyan-300 transition-colors" data-testid={`scheme-central-${i}`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-900">{s.name}</h4>
-                    <span className="text-xs px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full">{s.type}</span>
+              <a key={i} href={s.url} target="_blank" rel="noreferrer" className="block">
+                <Card className="p-5 rounded-2xl border-2 border-slate-200 hover:border-cyan-400 hover:shadow-md transition-all cursor-pointer" data-testid={`scheme-central-${i}`}>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-900">{s.name}</h4>
+                      <span className="text-xs px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full">{s.type}</span>
+                    </div>
+                    <ExternalLink size={16} className="text-cyan-600" />
                   </div>
-                  <a href={s.url} target="_blank" rel="noreferrer" className="text-cyan-600 hover:text-cyan-800"><ExternalLink size={16} /></a>
-                </div>
-                <p className="text-xs text-slate-600 mt-2">{s.description}</p>
-              </Card>
+                  <p className="text-xs text-slate-600 mt-2">{s.description}</p>
+                </Card>
+              </a>
             ))}
           </div>
 
@@ -141,10 +143,17 @@ const FinancialSupportPage = () => {
               <h3 className="text-base font-heading font-semibold text-slate-900 mt-4">{schemeState} State Schemes</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {schemes.state.map((s, i) => (
-                  <Card key={i} className="p-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50" data-testid={`scheme-state-${i}`}>
-                    <h4 className="text-sm font-semibold text-slate-900">{s.name}</h4>
-                    <p className="text-xs text-slate-600 mt-1">{s.description}</p>
-                  </Card>
+                  <a key={i} href={s.url} target="_blank" rel="noreferrer" className="block">
+                    <Card className="p-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer" data-testid={`scheme-state-${i}`}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-900">{s.name}</h4>
+                          <p className="text-xs text-slate-600 mt-1">{s.description}</p>
+                        </div>
+                        <ExternalLink size={16} className="text-emerald-600" />
+                      </div>
+                    </Card>
+                  </a>
                 ))}
               </div>
             </>
@@ -157,19 +166,18 @@ const FinancialSupportPage = () => {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {insurance.map((ins, i) => (
-              <Card key={i} className={`p-5 rounded-2xl border-2 ${ins.type === 'Government' ? 'border-emerald-200 bg-emerald-50' : 'border-sky-200 bg-sky-50'}`} data-testid={`insurance-${i}`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${ins.type === 'Government' ? 'bg-emerald-200 text-emerald-800' : 'bg-sky-200 text-sky-800'}`}>{ins.type}</span>
-                    <h4 className="text-sm font-semibold text-slate-900 mt-2">{ins.name}</h4>
+              <a key={i} href={ins.url} target="_blank" rel="noreferrer" className="block">
+                <Card className={`p-5 rounded-2xl border-2 hover:shadow-md transition-all cursor-pointer ${ins.type === 'Government' ? 'border-emerald-200 bg-emerald-50 hover:border-emerald-400' : 'border-sky-200 bg-sky-50 hover:border-sky-400'}`} data-testid={`insurance-${i}`}>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${ins.type === 'Government' ? 'bg-emerald-200 text-emerald-800' : 'bg-sky-200 text-sky-800'}`}>{ins.type}</span>
+                      <h4 className="text-sm font-semibold text-slate-900 mt-2">{ins.name}</h4>
+                    </div>
+                    <ExternalLink size={16} className="text-slate-400" />
                   </div>
-                  <Shield size={20} className="text-slate-400" />
-                </div>
-                <p className="text-xs text-slate-600 mt-2">{ins.description}</p>
-                <a href={ins.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-cyan-600 hover:text-cyan-800 mt-3 font-semibold">
-                  Visit Site <ExternalLink size={12} />
-                </a>
-              </Card>
+                  <p className="text-xs text-slate-600 mt-2">{ins.description}</p>
+                </Card>
+              </a>
             ))}
           </div>
         </motion.div>

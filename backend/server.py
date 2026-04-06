@@ -72,6 +72,9 @@ ws_manager = ConnectionManager()
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY')
+OLLAMA_URL = os.environ.get('OLLAMA_URL', '').strip()
+ROVER_FEED_URL_ENV = os.environ.get('ROVER_FEED_URL', '').strip()
+DRONE_FEED_URL_ENV = os.environ.get('DRONE_FEED_URL', '').strip()
 
 
 # Pydantic Models
@@ -479,21 +482,36 @@ async def get_water_analytics(user_id: str = Depends(get_current_user_id)):
     }
 
 
+# Camera Feed Config Endpoint
+@api_router.get("/config/camera-feeds")
+async def get_camera_feeds():
+    """Returns configured camera feed URLs for Rover and Drone"""
+    return {
+        "rover_feed_url": ROVER_FEED_URL_ENV,
+        "drone_feed_url": DRONE_FEED_URL_ENV,
+    }
+
+
 # AI Chat
 @api_router.post("/chat")
 async def chat_with_advisor(request: dict, user_id: str = Depends(get_current_user_id)):
     message = request.get("message")
     session_id = request.get("session_id")
     
+    system_prompt = (
+        "You are an expert agricultural AI advisor for AquaSense AI platform. "
+        "You specialize in precision irrigation, crop health analysis, soil management, "
+        "pest control, crop prediction, mandi pricing, government schemes, and farm finance. "
+        "Provide clear, actionable advice to farmers. Be specific with recommendations."
+    )
+
     try:
-        chat = LlmChat(
-            api_key=GEMINI_API_KEY,
-            session_id=session_id,
-            system_message="You are an expert agricultural AI advisor specializing in precision irrigation."
-        ).with_model("gemini", "gemini-3-pro-preview")
-        
-        user_message = UserMessage(text=message)
-        response_text = await chat.send_message(user_message)
+        # If OLLAMA_URL is configured, use Ollama for local inference
+        if OLLAMA_URL:
+            response_text = await _chat_ollama(message, session_id, system_prompt)
+        else:
+            # Use Gemini via Emergent LLM Key
+            response_text = await _chat_gemini(message, session_id, system_prompt)
         
         await chat_history_collection.insert_many([
             {
@@ -514,14 +532,64 @@ async def chat_with_advisor(request: dict, user_id: str = Depends(get_current_us
         
         return {
             "response": response_text,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "llm_mode": "ollama" if OLLAMA_URL else "gemini"
         }
     except Exception as e:
         logging.error(f"Chat error: {e}")
         return {
             "response": "I'm experiencing technical difficulties. Please check your sensor data and weather forecasts.",
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "llm_mode": "error"
         }
+
+
+async def _chat_gemini(message: str, session_id: str, system_prompt: str) -> str:
+    """Chat using Gemini via Emergent LLM Key"""
+    chat = LlmChat(
+        api_key=GEMINI_API_KEY,
+        session_id=session_id,
+        system_message=system_prompt
+    ).with_model("gemini", "gemini-3-pro-preview")
+    
+    user_message = UserMessage(text=message)
+    return await chat.send_message(user_message)
+
+
+async def _chat_ollama(message: str, session_id: str, system_prompt: str) -> str:
+    """Chat using local Ollama instance"""
+    # Retrieve recent chat history for context
+    history = await chat_history_collection.find(
+        {"session_id": session_id},
+        {"_id": 0, "role": 1, "content": 1}
+    ).sort("timestamp", -1).limit(10).to_list(10)
+    history.reverse()
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in history:
+        messages.append({"role": h["role"], "content": h["content"]})
+    messages.append({"role": "user", "content": message})
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={"model": os.environ.get("OLLAMA_MODEL", "llama3"), "messages": messages, "stream": False},
+            timeout=aiohttp.ClientTimeout(total=120)
+        ) as resp:
+            if resp.status != 200:
+                raise Exception(f"Ollama returned status {resp.status}")
+            data = await resp.json()
+            return data.get("message", {}).get("content", "No response from Ollama")
+
+
+@api_router.get("/chat/mode")
+async def get_chat_mode():
+    """Returns which LLM mode is active"""
+    return {
+        "mode": "ollama" if OLLAMA_URL else "gemini",
+        "ollama_url": OLLAMA_URL if OLLAMA_URL else None,
+        "ollama_model": os.environ.get("OLLAMA_MODEL", "llama3") if OLLAMA_URL else None,
+    }
 
 
 # Simulation
@@ -979,13 +1047,15 @@ async def get_latest_drone_analysis(user_id: str = Depends(get_current_user_id))
 # Rover Crop Health Analysis Endpoints
 from rover_processor import rover_analyzer
 
-ROVER_FEED_URL = "https://camera-backend-nhqu.onrender.com/frame"
+ROVER_FEED_URL = ROVER_FEED_URL_ENV or ""
 
 @api_router.get("/rover/analyze-frame")
 async def analyze_rover_frame(user_id: str = Depends(get_current_user_id)):
     """Fetch a frame from the rover camera and analyze crop health"""
     if rover_analyzer is None:
         raise HTTPException(status_code=500, detail="Rover model not loaded")
+    if not ROVER_FEED_URL:
+        raise HTTPException(status_code=400, detail="Rover camera feed URL not configured. Set ROVER_FEED_URL in backend/.env")
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(ROVER_FEED_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:

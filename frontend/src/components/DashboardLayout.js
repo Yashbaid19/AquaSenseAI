@@ -47,7 +47,7 @@ const DashboardLayout = () => {
     { path: '/rover', icon: Truck, label: 'Rover Monitor' },
     { path: '/analytics', icon: Gauge, label: 'Water Analytics' },
     { path: '/chat', icon: MessageSquare, label: 'AI Advisor' },
-    { section: 'KrishiRakshak' },
+    { section: 'Agriculture' },
     { path: '/crop-prediction', icon: Leaf, label: 'Crop Prediction' },
     { path: '/yield-prediction', icon: TrendingUp, label: 'Yield Prediction' },
     { path: '/mandi', icon: Store, label: 'Mandi Pricing' },

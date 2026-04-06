@@ -2,12 +2,11 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Upload, Leaf, RefreshCw, Droplets, Activity, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Camera, Upload, Leaf, RefreshCw, Droplets, Activity, AlertTriangle, CheckCircle, LinkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const ROVER_FEED_URL = 'https://camera-backend-nhqu.onrender.com/frame';
 
 const HealthBadge = ({ health, confidence }) => {
   const styles = {
@@ -51,12 +50,34 @@ const RoverMonitoringPage = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [feedKey, setFeedKey] = useState(Date.now());
-  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [autoAnalyze, setAutoAnalyze] = useState(false);
+  const [roverFeedUrl, setRoverFeedUrl] = useState('');
+  const [feedLoaded, setFeedLoaded] = useState(false);
   const feedInterval = useRef(null);
   const analyzeInterval = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Fetch camera feed URL from backend config
+  useEffect(() => {
+    const fetchFeedUrl = async () => {
+      try {
+        const res = await axios.get(`${API}/config/camera-feeds`);
+        const url = res.data.rover_feed_url;
+        if (url) {
+          setRoverFeedUrl(url);
+          setAutoAnalyze(true);
+        }
+      } catch (e) {
+        console.error('Failed to fetch camera config:', e);
+      } finally {
+        setFeedLoaded(true);
+      }
+    };
+    fetchFeedUrl();
+  }, []);
+
   const analyzeLiveFeed = useCallback(async () => {
+    if (!roverFeedUrl) return;
     try {
       setAnalyzing(true);
       const token = localStorage.getItem('token');
@@ -69,9 +90,10 @@ const RoverMonitoringPage = () => {
     } finally {
       setAnalyzing(false);
     }
-  }, []);
+  }, [roverFeedUrl]);
 
   useEffect(() => {
+    if (!roverFeedUrl) return;
     feedInterval.current = setInterval(() => setFeedKey(Date.now()), 500);
     analyzeLiveFeed();
     if (autoAnalyze) {
@@ -81,7 +103,7 @@ const RoverMonitoringPage = () => {
       clearInterval(feedInterval.current);
       clearInterval(analyzeInterval.current);
     };
-  }, [autoAnalyze, analyzeLiveFeed]);
+  }, [autoAnalyze, analyzeLiveFeed, roverFeedUrl]);
 
   const handleUpload = async (event) => {
     const file = event.target.files[0];
@@ -181,30 +203,47 @@ const RoverMonitoringPage = () => {
         <div className="lg:col-span-2">
           <Card className="overflow-hidden rounded-2xl border-2 border-slate-200" data-testid="rover-live-feed">
             <div className="relative bg-slate-900">
-              <img
-                src={`${ROVER_FEED_URL}?t=${feedKey}`}
-                alt="Rover Live Feed"
-                className="w-full h-[420px] object-contain"
-                onError={(e) => { e.target.style.opacity = 0.3; }}
-              />
-              <div className="absolute top-4 left-4 flex items-center gap-2">
-                <div className="px-3 py-1.5 rounded-full bg-red-500/90 text-white text-xs font-semibold flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                  LIVE
-                </div>
-                {analyzing && (
-                  <div className="px-3 py-1.5 rounded-full bg-sky-500/90 text-white text-xs font-semibold flex items-center gap-1.5">
-                    <RefreshCw className="animate-spin" size={12} />
-                    Analyzing...
+              {roverFeedUrl ? (
+                <>
+                  <img
+                    src={`${roverFeedUrl}?t=${feedKey}`}
+                    alt="Rover Live Feed"
+                    className="w-full h-[420px] object-contain"
+                    onError={(e) => { e.target.style.opacity = 0.3; }}
+                  />
+                  <div className="absolute top-4 left-4 flex items-center gap-2">
+                    <div className="px-3 py-1.5 rounded-full bg-red-500/90 text-white text-xs font-semibold flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                      LIVE
+                    </div>
+                    {analyzing && (
+                      <div className="px-3 py-1.5 rounded-full bg-sky-500/90 text-white text-xs font-semibold flex items-center gap-1.5">
+                        <RefreshCw className="animate-spin" size={12} />
+                        Analyzing...
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              {liveAnalysis && (
-                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                  <HealthBadge health={liveAnalysis.health} confidence={liveAnalysis.confidence} />
-                  <div className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs">
-                    Water Stress: {(liveAnalysis.water_stress_index * 100).toFixed(0)}%
+                  {liveAnalysis && (
+                    <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                      <HealthBadge health={liveAnalysis.health} confidence={liveAnalysis.confidence} />
+                      <div className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs">
+                        Water Stress: {(liveAnalysis.water_stress_index * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-[420px] text-slate-400 px-8">
+                  <LinkIcon size={48} className="mb-4 opacity-40" />
+                  <p className="text-xl font-semibold text-white mb-2">Rover Camera Not Connected</p>
+                  <p className="text-sm text-center max-w-md mb-4">
+                    To connect your ESP32-CAM rover feed, add the URL to your backend configuration:
+                  </p>
+                  <div className="bg-slate-800 rounded-xl p-4 text-left w-full max-w-md">
+                    <p className="text-xs text-cyan-400 font-mono mb-1"># In backend/.env file, set:</p>
+                    <p className="text-sm text-emerald-400 font-mono">ROVER_FEED_URL=http://&lt;your-esp32-ip&gt;/frame</p>
                   </div>
+                  <p className="text-xs text-slate-500 mt-3">You can still upload images manually for analysis below.</p>
                 </div>
               )}
             </div>
