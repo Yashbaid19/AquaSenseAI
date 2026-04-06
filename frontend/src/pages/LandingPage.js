@@ -73,7 +73,7 @@ const LandingPage = () => {
 
   const fadeUp = { initial: { opacity: 0, y: 40 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6 } };
   const stagger = (i) => ({ initial: { opacity: 0, y: 30 }, animate: { opacity: 1, y: 0 }, transition: { delay: i * 0.1, duration: 0.5 } });
-
+  const colorMap = { red: 'red-400', orange: 'orange-400', amber: 'amber-400', cyan: 'cyan-400', teal: 'teal-400', emerald: 'emerald-400', violet: 'violet-400', sky: 'sky-400' };
   const slides = [
     // ─── SLIDE 0: TITLE ───
     () => (
@@ -131,7 +131,7 @@ const LandingPage = () => {
             <motion.div key={i} {...stagger(i)}>
               <Card className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-red-500/30 transition-all text-center h-full">
                 <item.icon size={28} className="text-red-400/70 mx-auto mb-3" />
-                <p className={`text-4xl font-black text-${item.color}-400 mb-1`}>{item.val}</p>
+                <p className={`text-4xl font-black text-${colorMap[item.color]} mb-1`}>{item.val}</p>
                 <p className="text-sm font-bold text-white">{item.label}</p>
                 <p className="text-xs text-slate-500 mt-1">{item.desc}</p>
               </Card>
