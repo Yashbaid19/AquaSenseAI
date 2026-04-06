@@ -21,9 +21,9 @@ async def get_historical_report(
     if not readings:
         return {"readings": [], "summary": {}, "days": days, "metric": metric}
 
-    sm_vals = [r.get("soil_moisture") for r in readings if r.get("soil_moisture") is not None]
-    temp_vals = [r.get("temperature") for r in readings if r.get("temperature") is not None]
-    hum_vals = [r.get("humidity") for r in readings if r.get("humidity") is not None]
+    sm_vals = [r.get("soil_moisture") for r in readings if r.get("soil_moisture") is not None and 0 <= r.get("soil_moisture", -1) <= 100]
+    temp_vals = [r.get("temperature") for r in readings if r.get("temperature") is not None and -50 <= r.get("temperature", -999) <= 70]
+    hum_vals = [r.get("humidity") for r in readings if r.get("humidity") is not None and 0 <= r.get("humidity", -1) <= 100]
 
     summary = {
         "total_readings": len(readings),
@@ -44,11 +44,11 @@ async def get_historical_report(
         sm = r.get("soil_moisture")
         temp = r.get("temperature")
         hum = r.get("humidity")
-        if sm is not None:
+        if sm is not None and 0 <= sm <= 100:
             daily[day]["soil_moisture"].append(sm)
-        if temp is not None:
+        if temp is not None and -50 <= temp <= 70:
             daily[day]["temperature"].append(temp)
-        if hum is not None:
+        if hum is not None and 0 <= hum <= 100:
             daily[day]["humidity"].append(hum)
         daily[day]["count"] += 1
 
